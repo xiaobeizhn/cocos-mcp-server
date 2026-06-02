@@ -1,7 +1,7 @@
 # Cocos Creator MCP 服务器插件
 
-- **基于https://github.com/DaxianLee/cocos-mcp-serve**
-- **基于v1.4.0，看样子是不会更新开源版本了，遂fork了一份自己修复一些3.8.8下的兼容性bug**
+- **原项目作者为 [DaxianLee](https://github.com/DaxianLee/cocos-mcp-server).**
+- **基于cocos-mcp-server v1.4.0，看样子是不会更新开源版本了，遂fork了一份自己修复一些3.8.8下的兼容性bug**
 
 ## 快速使用
 
