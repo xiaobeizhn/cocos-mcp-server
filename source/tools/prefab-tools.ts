@@ -963,7 +963,8 @@ export class PrefabTools implements ToolExecutor {
     }
 
     /**
-     * 使用MCP接口增强节点树，获取正确的组件信息
+     * 使用 Editor API 增强节点树，获取正确的组件信息（cid 而非类名）。
+     * 替代之前的 HTTP 自调用方案（端口硬编码 8585 不可靠）。
      */
     private async enhanceTreeWithMCPComponents(node: any): Promise<any> {
         if (!node || !node.uuid) {
@@ -971,34 +972,36 @@ export class PrefabTools implements ToolExecutor {
         }
 
         try {
-            // 使用MCP接口获取节点的组件信息
-            const response = await fetch('http://localhost:8585/mcp', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    "jsonrpc": "2.0",
-                    "method": "tools/call",
-                    "params": {
-                        "name": "component_get_components",
-                        "arguments": {
-                            "nodeUuid": node.uuid
+            const nodeData = await Editor.Message.request('scene', 'query-node', node.uuid);
+            if (nodeData && nodeData.__comps__ && nodeData.__comps__.length > 0) {
+                // 将 __comps__ 转换为简化的 components 结构（与 component-tools.getComponents 一致）
+                const components = nodeData.__comps__.map((comp: any) => {
+                    const props: any = {};
+                    // 提取组件属性（覆盖常见字段）
+                    if (comp.value && typeof comp.value === 'object') {
+                        for (const [k, v] of Object.entries(comp.value)) {
+                            props[k] = v;
                         }
-                    },
-                    "id": Date.now()
-                })
-            });
-            
-            const mcpResult = await response.json();
-            if (mcpResult.result?.content?.[0]?.text) {
-                const componentData = JSON.parse(mcpResult.result.content[0].text);
-                if (componentData.success && componentData.data.components) {
-                    // 更新节点的组件信息为MCP返回的正确数据
-                    node.components = componentData.data.components;
-                    console.log(`节点 ${node.uuid} 获取到 ${componentData.data.components.length} 个组件，包含脚本组件的正确类型`);
-                }
+                    }
+                    // 兼容：如果 comp 是 flat object（已经包含属性）
+                    for (const [k, v] of Object.entries(comp)) {
+                        if (k === '__type__' || k === 'cid' || k === 'uuid' || k === 'enabled') continue;
+                        if (k.startsWith('_')) continue; // 跳过内部字段
+                        if (!props[k]) props[k] = comp[k];
+                    }
+                    const propUuid = props?.uuid?.value;
+                    return {
+                        type: comp.__type__ || comp.cid || 'Unknown',
+                        uuid: propUuid || comp.uuid?.value || null,
+                        enabled: comp.enabled !== undefined ? comp.enabled : true,
+                        properties: props
+                    };
+                });
+                node.components = components;
+                console.log(`节点 ${node.uuid} 获取到 ${components.length} 个组件（含正确 cid）`);
             }
         } catch (error) {
-            console.warn(`获取节点 ${node.uuid} 的MCP组件信息失败:`, error);
+            console.warn(`获取节点 ${node.uuid} 的组件信息失败:`, error);
         }
 
         // 递归处理子节点
@@ -1320,24 +1323,101 @@ export class PrefabTools implements ToolExecutor {
     }
 
     private async updatePrefab(prefabPath: string, nodeUuid: string): Promise<ToolResponse> {
-        return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'query-asset-info', prefabPath).then((assetInfo: any) => {
+        return new Promise(async (resolve) => {
+            try {
+                const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', prefabPath);
                 if (!assetInfo) {
-                    throw new Error('Prefab not found');
+                    resolve({ success: false, error: `Prefab not found: ${prefabPath}` });
+                    return;
                 }
 
-                return Editor.Message.request('scene', 'apply-prefab', {
+                // 1. 校验节点是否为 prefab 实例（必须是 instantiate 出来的）
+                const nodeInfo: any = await Editor.Message.request('scene', 'query-node', nodeUuid);
+                if (!nodeInfo) {
+                    resolve({ success: false, error: `Node not found: ${nodeUuid}` });
+                    return;
+                }
+                const prefabRef = nodeInfo.__prefab__ || nodeInfo.prefab || (nodeInfo.value && (nodeInfo.value.__prefab__ || nodeInfo.value.prefab));
+                if (!prefabRef) {
+                    resolve({
+                        success: false,
+                        error: `节点 ${nodeUuid} 不是预制体实例。update_prefab 仅对已实例化的 prefab 根节点生效。请先用 instantiate_prefab 创建实例，修改后再次调用。`
+                    });
+                    return;
+                }
+
+                // 2. 读取更新前的文件内容（用于 diff）
+                let beforeSize = 0;
+                let beforeHash = '';
+                try {
+                    const diskPath: any = await Editor.Message.request('asset-db', 'query-path', assetInfo.url || prefabPath);
+                    const fs = require('fs');
+                    const filePath = diskPath?.file || diskPath?.path;
+                    if (filePath && fs.existsSync(filePath)) {
+                        const content = fs.readFileSync(filePath);
+                        beforeSize = content.length;
+                        const crypto = require('crypto');
+                        beforeHash = crypto.createHash('sha1').update(content).digest('hex').slice(0, 8);
+                    }
+                } catch { /* ignore */ }
+
+                // 3. 执行 apply-prefab
+                await Editor.Message.request('scene', 'apply-prefab', {
                     node: nodeUuid,
                     prefab: assetInfo.uuid
                 });
-            }).then(() => {
+
+                // 等待 asset-db 完成写入
+                await new Promise(r => setTimeout(r, 200));
+
+                // 4. 读取更新后的文件内容，计算 diff 摘要
+                let afterSize = 0;
+                let afterHash = '';
+                let sizeDiff = 0;
+                let changed = false;
+                try {
+                    const diskPath: any = await Editor.Message.request('asset-db', 'query-path', assetInfo.url || prefabPath);
+                    const fs = require('fs');
+                    const filePath = diskPath?.file || diskPath?.path;
+                    if (filePath && fs.existsSync(filePath)) {
+                        const content = fs.readFileSync(path);
+                        afterSize = content.length;
+                        const crypto = require('crypto');
+                        afterHash = crypto.createHash('sha1').update(content).digest('hex').slice(0, 8);
+                        sizeDiff = afterSize - beforeSize;
+                        changed = beforeHash !== afterHash;
+                    }
+                } catch { /* ignore */ }
+
+                // 5. 重新读取 prefab 内容，统计节点/组件数
+                let stats = null;
+                try {
+                    const afterData = await this.readPrefabFile(prefabPath);
+                    let nc = 0, cc = 0, sc = 0;
+                    for (const item of (afterData as any[]) || []) {
+                        const t = item?.__type__ || '';
+                        if (t === 'cc.Node') nc++;
+                        else if (t === 'cc.MissingScript') { cc++; sc++; }
+                        else if (t && !t.startsWith('cc.')) { cc++; sc++; }
+                        else if (t) cc++;
+                    }
+                    stats = { nodes: nc, components: cc, customScripts: sc };
+                } catch { /* ignore */ }
+
                 resolve({
                     success: true,
-                    message: 'Prefab updated successfully'
+                    message: changed ? 'Prefab updated successfully' : 'apply-prefab 已执行但 prefab 文件无变化（可能场景没有实质修改）',
+                    data: {
+                        changed,
+                        before: { size: beforeSize, hash: beforeHash },
+                        after: { size: afterSize, hash: afterHash },
+                        sizeDiff,
+                        stats
+                    }
                 });
-            }).catch((err: Error) => {
-                resolve({ success: false, error: err.message });
-            });
+            } catch (err: any) {
+                resolve({ success: false, error: err.message || String(err) });
+            }
         });
     }
 
@@ -1411,6 +1491,7 @@ export class PrefabTools implements ToolExecutor {
                     issues: validationResult.issues,
                     nodeCount: validationResult.nodeCount,
                     componentCount: validationResult.componentCount,
+                    details: validationResult.details,
                     message: validationResult.isValid ? '预制体格式有效' : '预制体格式存在问题',
                 },
             };
@@ -1420,10 +1501,13 @@ export class PrefabTools implements ToolExecutor {
         }
     }
 
-    private validatePrefabFormat(prefabData: any): { isValid: boolean; issues: string[]; nodeCount: number; componentCount: number } {
+    private validatePrefabFormat(prefabData: any): { isValid: boolean; issues: string[]; nodeCount: number; componentCount: number; details?: any } {
         const issues: string[] = [];
+        const warnings: string[] = [];
         let nodeCount = 0;
         let componentCount = 0;
+        const customScriptComps: any[] = [];
+        const cidPattern = /^[A-Za-z0-9+/_=]{20,}$/; // 压缩 UUID 形式的 cid（base64 类字符，长度通常 22~23
 
         // 检查基本结构
         if (!Array.isArray(prefabData)) {
@@ -1442,12 +1526,46 @@ export class PrefabTools implements ToolExecutor {
             issues.push('第一个元素必须是cc.Prefab类型');
         }
 
-        // 统计节点和组件
+        // 收集所有节点的 @property 绑定信息（用于空绑定检查）
+        // key: 节点索引；value: 节点名称 + 已绑定的属性集
+        const nodeBindings = new Map<number, { name: string; emptyBindings: string[] }>();
+
+        // 统计节点和组件 + 详细检查
         prefabData.forEach((item: any, index: number) => {
-            if (item.__type__ === 'cc.Node') {
+            if (!item || typeof item !== 'object') return;
+            const t = item.__type__ || '';
+
+            if (t === 'cc.Node') {
                 nodeCount++;
-            } else if (item.__type__ && item.__type__.includes('cc.')) {
+                const nodeName = item._name || `Node#${index}`;
+                nodeBindings.set(index, { name: nodeName, emptyBindings: [] });
+            } else if (t) {
                 componentCount++;
+                if (t === 'cc.MissingScript') {
+                    issues.push(`[MissingScript] 索引 ${index}（节点 ${item.node?.__id__ ?? '?'}）存在 MissingScript 组件，脚本可能已删除或未编译`);
+                } else if (!t.startsWith('cc.')) {
+                    // 自定义脚本组件
+                    customScriptComps.push({ index, type: t, item });
+                    // 校验 __type__ 是不是 cid（压缩 UUID）而非类名
+                    if (!cidPattern.test(t)) {
+                        issues.push(`[ScriptCid] 索引 ${index} 自定义脚本 __type__="${t}" 看起来是类名而非 cid（压缩UUID）。prefab 加载时会出现 MissingScript。`);
+                    }
+                    // 检查空 @property 绑定：仅当属性值表现为空（null/[]/无 __id__ 引用）
+                    const knownMetaKeys = new Set(['__type__', '_name', '_objFlags', '__editorExtras__', 'node', '_enabled', '__prefab', '__scriptAsset', '_id']);
+                    const emptyKeys: string[] = [];
+                    for (const [k, v] of Object.entries(item)) {
+                        if (knownMetaKeys.has(k)) continue;
+                        if (v === null) emptyKeys.push(k);
+                        else if (Array.isArray(v) && v.length === 0) emptyKeys.push(`${k}(empty array)`);
+                        else if (typeof v === 'object' && v && !('__id__' in v) && !('__uuid__' in v)) {
+                            // 对象但既不是 __id__ 也不是 __uuid__，可能是空引用
+                            // 仅警告，不视为错误
+                        }
+                    }
+                    if (emptyKeys.length > 0) {
+                        warnings.push(`[EmptyBinding] 索引 ${index}(${t.slice(0, 12)}…) 存在空绑定: ${emptyKeys.join(', ')}`);
+                    }
+                }
             }
         });
 
@@ -1458,9 +1576,15 @@ export class PrefabTools implements ToolExecutor {
 
         return {
             isValid: issues.length === 0,
-            issues,
+            issues: [...issues, ...warnings],
             nodeCount,
-            componentCount
+            componentCount,
+            details: {
+                customScriptCount: customScriptComps.length,
+                missingScriptCount: issues.filter(s => s.includes('MissingScript')).length,
+                scriptCidIssues: issues.filter(s => s.includes('ScriptCid')).length,
+                emptyBindingWarnings: warnings.length
+            }
         };
     }
 
@@ -1726,37 +1850,49 @@ export class PrefabTools implements ToolExecutor {
         // 然后处理组件
         if (includeComponents && nodeData.components && Array.isArray(nodeData.components)) {
             console.log(`处理节点 ${node._name} 的 ${nodeData.components.length} 个组件`);
-            
+
             const componentIndices: number[] = [];
             for (const component of nodeData.components) {
                 const componentIndex = context.currentId++;
                 componentIndices.push(componentIndex);
                 node._components.push({ "__id__": componentIndex });
-                
-                // 记录组件UUID到索引的映射
-                const componentUuid = component.uuid || (component.value && component.value.uuid);
+
+                // 记录组件UUID到索引的映射（关键：MCP 简化结构下 UUID 在 properties.uuid.value）
+                let componentUuid: string | null = null;
+                if (component.uuid) {
+                    componentUuid = component.uuid;
+                } else if (component.value && component.value.uuid) {
+                    componentUuid = component.value.uuid;
+                } else if (component.properties?.uuid?.value) {
+                    componentUuid = component.properties.uuid.value;
+                } else if (component.properties?.__prefab?.value?.fileId?.value) {
+                    // 兜底：使用 fileId（CompPrefabInfo 中的）作为内部引用 key
+                    componentUuid = component.properties.__prefab.value.fileId.value;
+                }
                 if (componentUuid) {
                     context.componentUuidToIndex.set(componentUuid, componentIndex);
                     console.log(`记录组件UUID映射: ${componentUuid} -> ${componentIndex}`);
                 }
-                
+
                 // 创建组件对象，传入context以处理引用
                 const componentObj = this.createComponentObject(component, nodeIndex, context);
                 prefabData[componentIndex] = componentObj;
-                
+
                 // 为组件创建 CompPrefabInfo
                 const compPrefabInfoIndex = context.currentId++;
+                // 优先复用源 prefab 中的 fileId（保持引用稳定）
+                const compFileId = (component.properties?.__prefab?.value?.fileId?.value) || this.generateFileId();
                 prefabData[compPrefabInfoIndex] = {
                     "__type__": "cc.CompPrefabInfo",
-                    "fileId": this.generateFileId()
+                    "fileId": compFileId
                 };
-                
+
                 // 如果组件对象有 __prefab 属性，设置引用
                 if (componentObj && typeof componentObj === 'object') {
                     componentObj.__prefab = { "__id__": compPrefabInfoIndex };
                 }
             }
-            
+
             console.log(`✅ 节点 ${node._name} 添加了 ${componentIndices.length} 个组件`);
         }
 
@@ -1940,11 +2076,12 @@ export class PrefabTools implements ToolExecutor {
         } else if (componentData.properties) {
             // 处理所有组件的属性（包括内置组件和自定义脚本组件）
             for (const [key, value] of Object.entries(componentData.properties)) {
-                if (key === 'node' || key === 'enabled' || key === '__type__' || 
-                    key === 'uuid' || key === 'name' || key === '__scriptAsset' || key === '_objFlags') {
-                    continue; // 跳过这些特殊属性，包括_objFlags
+                if (key === 'node' || key === 'enabled' || key === '__type__' ||
+                    key === 'uuid' || key === 'name' || key === '__scriptAsset' ||
+                    key === '_objFlags' || key === '__prefab') {
+                    continue; // 跳过这些特殊属性
                 }
-                
+
                 // 对于以下划线开头的属性，需要特殊处理
                 if (key.startsWith('_')) {
                     // 确保属性名保持原样（包括下划线）

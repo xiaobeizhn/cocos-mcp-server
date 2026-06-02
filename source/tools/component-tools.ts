@@ -288,32 +288,38 @@ export class ComponentTools implements ToolExecutor {
                 resolve({ success: false, error: `Failed to get components for node '${nodeUuid}': ${allComponentsInfo.error}` });
                 return;
             }
-            // 2. 只查找type字段等于componentType的组件（即cid）
-            const exists = allComponentsInfo.data.components.some((comp: any) => comp.type === componentType);
-            if (!exists) {
+            // 2. 查找目标组件（按 cid 匹配）
+            const targetComp = allComponentsInfo.data.components.find((comp: any) => comp.type === componentType);
+            if (!targetComp) {
                 resolve({ success: false, error: `Component cid '${componentType}' not found on node '${nodeUuid}'. 请用getComponents获取type字段（cid）作为componentType。` });
                 return;
             }
-            // 3. 官方API直接移除
+            // 3. remove-component API: uuid 参数为组件 UUID（非节点 UUID）
+            const compUuid = targetComp.uuid;
+            if (!compUuid) {
+                resolve({ success: false, error: `无法获取组件 '${componentType}' 的 UUID，无法移除。请尝试在编辑器中手动移除。` });
+                return;
+            }
             try {
                 await Editor.Message.request('scene', 'remove-component', {
-                    uuid: nodeUuid,
-                    component: componentType
+                    uuid: compUuid
                 });
-                // 4. 再查一次确认是否移除
-                const afterRemoveInfo = await this.getComponents(nodeUuid);
-                const stillExists = afterRemoveInfo.success && afterRemoveInfo.data?.components?.some((comp: any) => comp.type === componentType);
-                if (stillExists) {
-                    resolve({ success: false, error: `Component cid '${componentType}' was not removed from node '${nodeUuid}'.` });
-                } else {
-                    resolve({
-                        success: true,
-                        message: `Component cid '${componentType}' removed successfully from node '${nodeUuid}'`,
-                        data: { nodeUuid, componentType }
-                    });
-                }
             } catch (err: any) {
                 resolve({ success: false, error: `Failed to remove component: ${err.message}` });
+                return;
+            }
+            // 4. 验证是否移除成功
+            await new Promise(r => setTimeout(r, 100));
+            const afterRemoveInfo = await this.getComponents(nodeUuid);
+            const stillExists = afterRemoveInfo.success && afterRemoveInfo.data?.components?.some((comp: any) => comp.type === componentType);
+            if (stillExists) {
+                resolve({ success: false, error: `Component cid '${componentType}' was not removed from node '${nodeUuid}'.` });
+            } else {
+                resolve({
+                    success: true,
+                    message: `Component cid '${componentType}' removed successfully from node '${nodeUuid}'`,
+                    data: { nodeUuid, componentType }
+                });
             }
         });
     }
@@ -323,12 +329,19 @@ export class ComponentTools implements ToolExecutor {
             // 优先尝试直接使用 Editor API 查询节点信息
             Editor.Message.request('scene', 'query-node', nodeUuid).then((nodeData: any) => {
                 if (nodeData && nodeData.__comps__) {
-                    const components = nodeData.__comps__.map((comp: any) => ({
-                        type: comp.__type__ || comp.cid || comp.type || 'Unknown',
-                        uuid: comp.uuid?.value || comp.uuid || null,
-                        enabled: comp.enabled !== undefined ? comp.enabled : true,
-                        properties: this.extractComponentProperties(comp)
-                    }));
+                    const components = nodeData.__comps__.map((comp: any) => {
+                        const props = this.extractComponentProperties(comp);
+                        // 组件 UUID 优先从 properties.uuid.value 获取（最可靠）
+                        const propUuid = props?.uuid?.value;
+                        // 兼容旧路径：comp.uuid?.value
+                        const legacyUuid = comp.uuid?.value || comp.uuid || null;
+                        return {
+                            type: comp.__type__ || comp.cid || comp.type || 'Unknown',
+                            uuid: propUuid || legacyUuid || null,
+                            enabled: comp.enabled !== undefined ? comp.enabled : true,
+                            properties: props
+                        };
+                    });
                     
                     resolve({
                         success: true,
@@ -1096,10 +1109,28 @@ export class ComponentTools implements ToolExecutor {
                 resolve({ success: false, error: 'Invalid script path' });
                 return;
             }
+
+            // 解析脚本 UUID：从 asset-db 获取脚本资源信息，用于后续匹配
+            let scriptUuid: string | null = null;
+            try {
+                const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', scriptPath);
+                if (assetInfo?.uuid) {
+                    scriptUuid = assetInfo.uuid;
+                }
+            } catch { /* ignore */ }
+
             // 先查找节点上是否已存在该脚本组件
+            // 匹配策略：1) __scriptAsset.uuid 等于脚本 UUID  2) comp.type 等于脚本类名（内置组件） 3) comp.type 等于脚本 cid
             const allComponentsInfo = await this.getComponents(nodeUuid);
             if (allComponentsInfo.success && allComponentsInfo.data?.components) {
-                const existingScript = allComponentsInfo.data.components.find((comp: any) => comp.type === scriptName);
+                const existingScript = allComponentsInfo.data.components.find((comp: any) => {
+                    // 通过 __scriptAsset.uuid 匹配（最可靠）
+                    const scriptAssetUuid = comp.properties?.__scriptAsset?.value?.uuid;
+                    if (scriptUuid && scriptAssetUuid === scriptUuid) return true;
+                    // 通过 type 字段匹配（内置组件或 cid 格式）
+                    if (comp.type === scriptName) return true;
+                    return false;
+                });
                 if (existingScript) {
                     resolve({
                         success: true,
@@ -1107,23 +1138,30 @@ export class ComponentTools implements ToolExecutor {
                         data: {
                             nodeUuid: nodeUuid,
                             componentName: scriptName,
+                            componentType: existingScript.type,
                             existing: true
                         }
                     });
                     return;
                 }
             }
-            // 首先尝试直接使用脚本名称作为组件类型
+
+            // 使用 create-component API 挂载脚本
             Editor.Message.request('scene', 'create-component', {
                 uuid: nodeUuid,
-                component: scriptName  // 使用脚本名称而非UUID
-            }).then(async (result: any) => {
-                // 等待一段时间让Editor完成组件添加
-                await new Promise(resolve => setTimeout(resolve, 100));
-                // 重新查询节点信息验证脚本是否真的添加成功
+                component: scriptName
+            }).then(async () => {
+                // 等待 Editor 完成组件添加
+                await new Promise(r => setTimeout(r, 200));
+                // 重新查询验证：通过 __scriptAsset.uuid 或 type 匹配
                 const allComponentsInfo2 = await this.getComponents(nodeUuid);
                 if (allComponentsInfo2.success && allComponentsInfo2.data?.components) {
-                    const addedScript = allComponentsInfo2.data.components.find((comp: any) => comp.type === scriptName);
+                    const addedScript = allComponentsInfo2.data.components.find((comp: any) => {
+                        const scriptAssetUuid = comp.properties?.__scriptAsset?.value?.uuid;
+                        if (scriptUuid && scriptAssetUuid === scriptUuid) return true;
+                        if (comp.type === scriptName) return true;
+                        return false;
+                    });
                     if (addedScript) {
                         resolve({
                             success: true,
@@ -1131,6 +1169,7 @@ export class ComponentTools implements ToolExecutor {
                             data: {
                                 nodeUuid: nodeUuid,
                                 componentName: scriptName,
+                                componentType: addedScript.type,
                                 existing: false
                             }
                         });
@@ -1156,8 +1195,8 @@ export class ComponentTools implements ToolExecutor {
                 Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
                     resolve(result);
                 }).catch(() => {
-                    resolve({ 
-                        success: false, 
+                    resolve({
+                        success: false,
                         error: `Failed to attach script '${scriptName}': ${err.message}`,
                         instruction: 'Please ensure the script is properly compiled and exported as a Component class. You can also manually attach the script through the Properties panel in the editor.'
                     });
