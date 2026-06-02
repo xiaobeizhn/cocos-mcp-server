@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
 import { ToolDefinition, ToolResponse, ToolExecutor, PrefabInfo } from '../types';
 
 export class PrefabTools implements ToolExecutor {
@@ -232,28 +235,30 @@ export class PrefabTools implements ToolExecutor {
     }
 
     private async loadPrefab(prefabPath: string): Promise<ToolResponse> {
-        return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'query-asset-info', prefabPath).then((assetInfo: any) => {
-                if (!assetInfo) {
-                    throw new Error('Prefab not found');
-                }
-                
-                return Editor.Message.request('scene', 'load-asset', {
-                    uuid: assetInfo.uuid
-                });
-            }).then((prefabData: any) => {
-                resolve({
-                    success: true,
-                    data: {
-                        uuid: prefabData.uuid,
-                        name: prefabData.name,
-                        message: 'Prefab loaded successfully'
-                    }
-                });
-            }).catch((err: Error) => {
-                resolve({ success: false, error: err.message });
-            });
-        });
+        try {
+            const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', prefabPath);
+            if (!assetInfo) {
+                return { success: false, error: 'Prefab not found' };
+            }
+
+            const prefabData = await this.readPrefabFile(prefabPath);
+            const validationResult = this.validatePrefabFormat(prefabData);
+
+            return {
+                success: true,
+                data: {
+                    uuid: assetInfo.uuid,
+                    name: assetInfo.name,
+                    path: prefabPath,
+                    nodeCount: validationResult.nodeCount,
+                    componentCount: validationResult.componentCount,
+                    message: 'Prefab loaded successfully',
+                },
+            };
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            return { success: false, error: message };
+        }
     }
 
     private async instantiatePrefab(args: any): Promise<ToolResponse> {
@@ -330,23 +335,33 @@ export class PrefabTools implements ToolExecutor {
         try {
             // 读取预制体文件获取根节点的fileId
             const prefabContent = await this.readPrefabFile(prefabPath);
-            if (!prefabContent || !prefabContent.data || !prefabContent.data.length) {
+            if (!Array.isArray(prefabContent) || prefabContent.length === 0) {
                 throw new Error('无法读取预制体文件内容');
             }
 
             // 找到预制体根节点的fileId (通常是第二个对象，即索引1)
-            const rootNode = prefabContent.data.find((item: any) => item.__type === 'cc.Node' && item._parent === null);
+            const rootNode = prefabContent.find(
+                (item: unknown) => {
+                    const node = item as { __type__?: string; _parent?: unknown; _prefab?: { __id__?: number } };
+                    return node.__type__ === 'cc.Node' && node._parent === null;
+                },
+            ) as { _prefab?: { __id__?: number } } | undefined;
             if (!rootNode || !rootNode._prefab) {
                 throw new Error('无法找到预制体根节点或其预制体信息');
             }
 
             // 获取根节点的PrefabInfo
-            const rootPrefabInfo = prefabContent.data[rootNode._prefab.__id__];
-            if (!rootPrefabInfo || rootPrefabInfo.__type !== 'cc.PrefabInfo') {
+            const rootPrefabInfo = prefabContent[rootNode._prefab.__id__ ?? -1] as
+                | { __type__?: string; fileId?: string }
+                | undefined;
+            if (!rootPrefabInfo || rootPrefabInfo.__type__ !== 'cc.PrefabInfo') {
                 throw new Error('无法找到预制体根节点的PrefabInfo');
             }
 
             const rootFileId = rootPrefabInfo.fileId;
+            if (!rootFileId) {
+                throw new Error('无法找到预制体根节点的 fileId');
+            }
 
             // 使用scene API建立预制体连接
             const prefabConnectionData = {
@@ -419,71 +434,49 @@ export class PrefabTools implements ToolExecutor {
     }
 
     /**
-     * 读取预制体文件内容
+     * 解析 prefab 的磁盘路径（Creator 3.8 无 read-asset 消息，需通过 query-asset-info + fs 读取）
      */
-    private async readPrefabFile(prefabPath: string): Promise<any> {
-        try {
-            // 尝试使用asset-db API读取文件内容
-            let assetContent: any;
-            try {
-                assetContent = await Editor.Message.request('asset-db', 'query-asset-info', prefabPath);
-                if (assetContent && assetContent.source) {
-                    // 如果有source路径，直接读取文件
-                    const fs = require('fs');
-                    const path = require('path');
-                    const fullPath = path.resolve(assetContent.source);
-                    const fileContent = fs.readFileSync(fullPath, 'utf8');
-                    return JSON.parse(fileContent);
-                }
-            } catch (error) {
-                console.warn('使用asset-db读取失败，尝试其他方法:', error);
-            }
+    private async resolvePrefabDiskPath(prefabPath: string): Promise<string> {
+        const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', prefabPath);
+        const candidatePaths: string[] = [];
 
-            // 备用方法：转换db://路径为实际文件路径
-            const fsPath = prefabPath.replace('db://assets/', 'assets/').replace('db://assets', 'assets');
-            const fs = require('fs');
-            const path = require('path');
-            
-            // 尝试多个可能的项目根路径
-            const possiblePaths = [
-                path.resolve(process.cwd(), '../../NewProject_3', fsPath),
-                path.resolve('/Users/lizhiyong/NewProject_3', fsPath),
-                path.resolve(fsPath),
-                // 如果是根目录下的文件，也尝试直接路径
-                path.resolve('/Users/lizhiyong/NewProject_3/assets', path.basename(fsPath))
-            ];
-
-            console.log('尝试读取预制体文件，路径转换:', {
-                originalPath: prefabPath,
-                fsPath: fsPath,
-                possiblePaths: possiblePaths
-            });
-
-            for (const fullPath of possiblePaths) {
-                try {
-                    console.log(`检查路径: ${fullPath}`);
-                    if (fs.existsSync(fullPath)) {
-                        console.log(`找到文件: ${fullPath}`);
-                        const fileContent = fs.readFileSync(fullPath, 'utf8');
-                        const parsed = JSON.parse(fileContent);
-                        console.log('文件解析成功，数据结构:', {
-                            hasData: !!parsed.data,
-                            dataLength: parsed.data ? parsed.data.length : 0
-                        });
-                        return parsed;
-                    } else {
-                        console.log(`文件不存在: ${fullPath}`);
-                    }
-                } catch (readError) {
-                    console.warn(`读取文件失败 ${fullPath}:`, readError);
-                }
-            }
-
-            throw new Error('无法找到或读取预制体文件');
-        } catch (error) {
-            console.error('读取预制体文件失败:', error);
-            throw error;
+        if (assetInfo?.source) {
+            candidatePaths.push(path.resolve(assetInfo.source));
         }
+        if (assetInfo?.path) {
+            candidatePaths.push(path.resolve(assetInfo.path));
+        }
+
+        const relativePath = prefabPath
+            .replace(/^db:\/\/assets\/?/, 'assets/')
+            .replace(/^db:\/\//, '');
+        const projectPath = Editor.Project?.path;
+        if (projectPath) {
+            candidatePaths.push(path.join(projectPath, relativePath));
+        }
+
+        for (const diskPath of candidatePaths) {
+            if (fs.existsSync(diskPath)) {
+                return diskPath;
+            }
+        }
+
+        throw new Error(`无法找到预制体文件: ${prefabPath}`);
+    }
+
+    /**
+     * 读取预制体 JSON 数组内容
+     */
+    private async readPrefabFile(prefabPath: string): Promise<unknown[]> {
+        const diskPath = await this.resolvePrefabDiskPath(prefabPath);
+        const fileContent = fs.readFileSync(diskPath, 'utf8');
+        const prefabData: unknown = JSON.parse(fileContent);
+
+        if (!Array.isArray(prefabData)) {
+            throw new Error('预制体文件格式错误，根节点必须是数组');
+        }
+
+        return prefabData;
     }
 
     private async tryCreateNodeWithPrefab(args: any): Promise<ToolResponse> {
@@ -1402,59 +1395,29 @@ export class PrefabTools implements ToolExecutor {
     }
 
     private async validatePrefab(prefabPath: string): Promise<ToolResponse> {
-        return new Promise((resolve) => {
-            try {
-                // 读取预制体文件内容
-                Editor.Message.request('asset-db', 'query-asset-info', prefabPath).then((assetInfo: any) => {
-                    if (!assetInfo) {
-                        resolve({
-                            success: false,
-                            error: '预制体文件不存在'
-                        });
-                        return;
-                    }
-
-                    // 验证预制体格式
-                    Editor.Message.request('asset-db', 'read-asset', prefabPath).then((content: string) => {
-                        try {
-                            const prefabData = JSON.parse(content);
-                            const validationResult = this.validatePrefabFormat(prefabData);
-                            
-                            resolve({
-                                success: true,
-                                data: {
-                                    isValid: validationResult.isValid,
-                                    issues: validationResult.issues,
-                                    nodeCount: validationResult.nodeCount,
-                                    componentCount: validationResult.componentCount,
-                                    message: validationResult.isValid ? '预制体格式有效' : '预制体格式存在问题'
-                                }
-                            });
-                        } catch (parseError) {
-                            resolve({
-                                success: false,
-                                error: '预制体文件格式错误，无法解析JSON'
-                            });
-                        }
-                    }).catch((error: any) => {
-                        resolve({
-                            success: false,
-                            error: `读取预制体文件失败: ${error.message}`
-                        });
-                    });
-                }).catch((error: any) => {
-                    resolve({
-                        success: false,
-                        error: `查询预制体信息失败: ${error.message}`
-                    });
-                });
-            } catch (error) {
-                resolve({
-                    success: false,
-                    error: `验证预制体时发生错误: ${error}`
-                });
+        try {
+            const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', prefabPath);
+            if (!assetInfo) {
+                return { success: false, error: '预制体文件不存在' };
             }
-        });
+
+            const prefabData = await this.readPrefabFile(prefabPath);
+            const validationResult = this.validatePrefabFormat(prefabData);
+
+            return {
+                success: true,
+                data: {
+                    isValid: validationResult.isValid,
+                    issues: validationResult.issues,
+                    nodeCount: validationResult.nodeCount,
+                    componentCount: validationResult.componentCount,
+                    message: validationResult.isValid ? '预制体格式有效' : '预制体格式存在问题',
+                },
+            };
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { success: false, error: message };
+        }
     }
 
     private validatePrefabFormat(prefabData: any): { isValid: boolean; issues: string[]; nodeCount: number; componentCount: number } {
@@ -1518,10 +1481,10 @@ export class PrefabTools implements ToolExecutor {
 
                 // 读取源预制体内容
                 const sourceContent = await this.readPrefabContent(sourcePrefabPath);
-                if (!sourceContent.success) {
+                if (!sourceContent.success || !sourceContent.data) {
                     resolve({
                         success: false,
-                        error: `无法读取源预制体内容: ${sourceContent.error}`
+                        error: `无法读取源预制体内容: ${sourceContent.error ?? '未知错误'}`,
                     });
                     return;
                 }
@@ -1551,19 +1514,14 @@ export class PrefabTools implements ToolExecutor {
         });
     }
 
-    private async readPrefabContent(prefabPath: string): Promise<{ success: boolean; data?: any; error?: string }> {
-        return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'read-asset', prefabPath).then((content: string) => {
-                try {
-                    const prefabData = JSON.parse(content);
-                    resolve({ success: true, data: prefabData });
-                } catch (parseError) {
-                    resolve({ success: false, error: '预制体文件格式错误' });
-                }
-            }).catch((error: any) => {
-                resolve({ success: false, error: error.message || '读取预制体文件失败' });
-            });
-        });
+    private async readPrefabContent(prefabPath: string): Promise<{ success: boolean; data?: unknown[]; error?: string }> {
+        try {
+            const prefabData = await this.readPrefabFile(prefabPath);
+            return { success: true, data: prefabData };
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { success: false, error: message || '读取预制体文件失败' };
+        }
     }
 
     private modifyPrefabForDuplication(prefabData: any[], newName: string, newUuid: string): any[] {

@@ -1,5 +1,6 @@
-import { v4 as uuidv4 } from 'uuid';
-import { ToolConfig, ToolConfiguration, ToolManagerSettings, ToolDefinition } from '../types';
+import { randomUUID } from 'crypto';
+
+import { ToolConfig, ToolConfiguration, ToolManagerSettings } from '../types';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -256,7 +257,7 @@ export class ToolManager {
         }
 
         const config: ToolConfiguration = {
-            id: uuidv4(),
+            id: randomUUID(),
             name,
             description,
             tools: this.availableTools.map(tool => ({ ...tool })),
@@ -384,7 +385,7 @@ export class ToolManager {
         const config = this.importToolConfiguration(configJson);
         
         // 生成新的ID和时间戳
-        config.id = uuidv4();
+        config.id = randomUUID();
         config.createdAt = new Date().toISOString();
         config.updatedAt = new Date().toISOString();
 

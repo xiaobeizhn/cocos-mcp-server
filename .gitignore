@@ -1,1 +1,4 @@
 node_modules/
+.claude/
+.cursor/
+**/*.local.json

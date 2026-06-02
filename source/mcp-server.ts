@@ -1,6 +1,5 @@
 import * as http from 'http';
 import * as url from 'url';
-import { v4 as uuidv4 } from 'uuid';
 import { MCPServerSettings, ServerStatus, MCPClient, ToolDefinition } from './types';
 import { SceneTools } from './tools/scene-tools';
 import { NodeTools } from './tools/node-tools';
