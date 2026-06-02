@@ -1,6 +1,7 @@
 # Cocos Creator MCP 服务器插件
 
-- **本项目基于Lidaxian v1.4.0 : https://github.com/DaxianLee/cocos-mcp-serve，看样子是不会更新开源版本了，遂fork了一份自己修复一些3.8.8下的兼容性bug**
+- **基于https://github.com/DaxianLee/cocos-mcp-serve**
+- **基于v1.4.0，看样子是不会更新开源版本了，遂fork了一份自己修复一些3.8.8下的兼容性bug**
 
 ## 主要功能类别（部分示例）
 
