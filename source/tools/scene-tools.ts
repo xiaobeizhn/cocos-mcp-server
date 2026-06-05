@@ -35,7 +35,7 @@ export class SceneTools implements ToolExecutor {
             },
             {
                 name: 'save_scene',
-                description: 'Save current scene',
+                description: 'Save current scene. IMPORTANT: This only saves the scene file (.scene), NOT any prefab files. Prefabs must be saved using prefab_save while in prefab editing mode (after prefab_open_for_edit).',
                 inputSchema: {
                     type: 'object',
                     properties: {}

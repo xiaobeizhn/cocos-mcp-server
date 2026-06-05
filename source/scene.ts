@@ -355,6 +355,19 @@ export const methods: { [key: string]: (...any: any) => any } = {
     },
 
     /**
+     * Execute arbitrary JavaScript in scene context (supports async)
+     */
+    async eval(script: string) {
+        try {
+            const fn = new Function('Editor', 'require', 'return (async () => { ' + script + ' })();');
+            const result = await fn(Editor, require);
+            return { success: true, data: result };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    },
+
+    /**
      * Set component property
      */
     setComponentProperty(nodeUuid: string, componentType: string, property: string, value: any) {

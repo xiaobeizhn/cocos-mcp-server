@@ -255,7 +255,7 @@ export class DebugTools implements ToolExecutor {
     private async executeScript(script: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
             Editor.Message.request('scene', 'execute-scene-script', {
-                name: 'console',
+                name: 'cocos-mcp-server',
                 method: 'eval',
                 args: [script]
             }).then((result: any) => {

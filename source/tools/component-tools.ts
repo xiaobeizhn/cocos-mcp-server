@@ -1,4 +1,5 @@
 import { ToolDefinition, ToolResponse, ToolExecutor, ComponentInfo } from '../types';
+import { PrefabTools } from './prefab-tools';
 
 export class ComponentTools implements ToolExecutor {
     getTools(): ToolDefinition[] {
@@ -218,7 +219,8 @@ export class ComponentTools implements ToolExecutor {
                             componentType: componentType,
                             componentVerified: true,
                             existing: true
-                        }
+                        },
+                        editContext: PrefabTools.getEditContext()
                     });
                     return;
                 }
@@ -244,7 +246,8 @@ export class ComponentTools implements ToolExecutor {
                                     componentType: componentType,
                                     componentVerified: true,
                                     existing: false
-                                }
+                                },
+                                editContext: PrefabTools.getEditContext()
                             });
                         } else {
                             resolve({
@@ -348,7 +351,8 @@ export class ComponentTools implements ToolExecutor {
                         data: {
                             nodeUuid: nodeUuid,
                             components: components
-                        }
+                        },
+                        editContext: PrefabTools.getEditContext()
                     });
                 } else {
                     resolve({ success: false, error: 'Node not found or no components data' });
@@ -395,7 +399,8 @@ export class ComponentTools implements ToolExecutor {
                                 componentType: componentType,
                                 enabled: component.enabled !== undefined ? component.enabled : true,
                                 properties: this.extractComponentProperties(component)
-                            }
+                            },
+                            editContext: PrefabTools.getEditContext()
                         });
                     } else {
                         resolve({ success: false, error: `Component '${componentType}' not found on node` });
@@ -1087,7 +1092,8 @@ export class ComponentTools implements ToolExecutor {
                         property,
                         actualValue: verification.actualValue,
                         changeVerified: verification.verified
-                    }
+                    },
+                    editContext: PrefabTools.getEditContext()
                 });
                 
             } catch (error: any) {

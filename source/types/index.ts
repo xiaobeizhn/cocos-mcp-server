@@ -25,6 +25,7 @@ export interface ToolResponse {
     error?: string;
     instruction?: string;
     warning?: string;
+    editContext?: EditContext;
     verificationData?: any;
     updatedProperties?: string[];
 }
@@ -153,4 +154,14 @@ export interface ToolManagerState {
     availableTools: ToolConfig[];
     currentConfiguration: ToolConfiguration | null;
     configurations: ToolConfiguration[];
+}
+
+export type EditContext = 'scene' | 'prefab-stage';
+
+export interface PrefabEditState {
+    active: boolean;
+    prefabPath: string;
+    prefabUuid: string;
+    rootUuid: string;
+    openedAt: string;
 }

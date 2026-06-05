@@ -1,5 +1,6 @@
 import { ToolDefinition, ToolResponse, ToolExecutor, NodeInfo } from '../types';
 import { ComponentTools } from './component-tools';
+import { PrefabTools } from './prefab-tools';
 
 export class NodeTools implements ToolExecutor {
     private componentTools = new ComponentTools();
@@ -485,7 +486,8 @@ export class NodeTools implements ToolExecutor {
                         assetUuid: finalAssetUuid,
                         message: successMessage
                     },
-                    verificationData: verificationData
+                    verificationData: verificationData,
+                    editContext: PrefabTools.getEditContext()
                 });
 
             } catch (err: any) {
@@ -525,7 +527,7 @@ export class NodeTools implements ToolExecutor {
                     layer: nodeData.layer?.value || 1073741824,
                     mobility: nodeData.mobility?.value || 0
                 };
-                resolve({ success: true, data: info });
+                resolve({ success: true, data: info, editContext: PrefabTools.getEditContext() });
             }).catch((err: Error) => {
                 resolve({ success: false, error: err.message });
             });
@@ -565,7 +567,7 @@ export class NodeTools implements ToolExecutor {
                     searchTree(tree);
                 }
                 
-                resolve({ success: true, data: nodes });
+                resolve({ success: true, data: nodes, editContext: PrefabTools.getEditContext() });
             }).catch((err: Error) => {
                 // 备用方案：使用场景脚本
                 const options = {
@@ -595,7 +597,8 @@ export class NodeTools implements ToolExecutor {
                             uuid: foundNode.uuid,
                             name: foundNode.name,
                             path: this.getNodePath(foundNode)
-                        }
+                        },
+                        editContext: PrefabTools.getEditContext()
                     });
                 } else {
                     resolve({ success: false, error: `Node '${name}' not found` });
@@ -660,13 +663,19 @@ export class NodeTools implements ToolExecutor {
                     traverseTree(tree);
                 }
                 
-                resolve({
+                const editCtx = PrefabTools.getEditContext();
+                const response: any = {
                     success: true,
                     data: {
                         totalNodes: nodes.length,
                         nodes: nodes
-                    }
-                });
+                    },
+                    editContext: editCtx
+                };
+                if (editCtx === 'prefab-stage') {
+                    response.warning = 'Currently in prefab editing mode. Node tree shows prefab structure, not the main scene.';
+                }
+                resolve(response);
             }).catch((err: Error) => {
                 // 备用方案：使用场景脚本
                 const options = {

@@ -1,9 +1,22 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { ToolDefinition, ToolResponse, ToolExecutor, PrefabInfo } from '../types';
+import { ToolDefinition, ToolResponse, ToolExecutor, PrefabInfo, PrefabEditState, EditContext } from '../types';
 
 export class PrefabTools implements ToolExecutor {
+    private static editState: PrefabEditState | null = null;
+
+    public static getEditState(): PrefabEditState | null {
+        return PrefabTools.editState;
+    }
+
+    public static getEditContext(): EditContext {
+        return PrefabTools.editState ? 'prefab-stage' : 'scene';
+    }
+
+    public static clearEditState(): void {
+        PrefabTools.editState = null;
+    }
     getTools(): ToolDefinition[] {
         return [
             {
@@ -36,7 +49,7 @@ export class PrefabTools implements ToolExecutor {
             },
             {
                 name: 'instantiate_prefab',
-                description: 'Instantiate a prefab in the scene',
+                description: '[DEPRECATED for editing] Instantiate a prefab in the scene. For prefab editing, use prefab_open_for_edit instead.',
                 inputSchema: {
                     type: 'object',
                     properties: {
@@ -85,7 +98,7 @@ export class PrefabTools implements ToolExecutor {
             },
             {
                 name: 'update_prefab',
-                description: 'Update an existing prefab',
+                description: '[DEPRECATED] Update an existing prefab from a scene instance. Use prefab_open_for_edit → edit → prefab_save instead.',
                 inputSchema: {
                     type: 'object',
                     properties: {
@@ -182,6 +195,42 @@ export class PrefabTools implements ToolExecutor {
                     },
                     required: ['nodeUuid', 'assetUuid']
                 }
+            },
+            {
+                name: 'open_for_edit',
+                description: 'Open a prefab in isolation editing mode. Opens the prefab directly in the prefab stage (not as a scene instance), allowing direct editing of the prefab asset.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        prefabPath: {
+                            type: 'string',
+                            description: 'Prefab asset path (e.g., db://assets/prefabs/MyPrefab.prefab)'
+                        }
+                    },
+                    required: ['prefabPath']
+                }
+            },
+            {
+                name: 'save',
+                description: 'Save the prefab currently being edited in prefab isolation mode. Must be called after prefab_open_for_edit.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {}
+                }
+            },
+            {
+                name: 'close',
+                description: 'Close prefab isolation editing mode and return to the scene. Optionally saves before closing.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        save: {
+                            type: 'boolean',
+                            description: 'Whether to save the prefab before closing (default: false)',
+                            default: false
+                        }
+                    }
+                }
             }
         ];
     }
@@ -208,6 +257,12 @@ export class PrefabTools implements ToolExecutor {
                 return await this.duplicatePrefab(args);
             case 'restore_prefab_node':
                 return await this.restorePrefabNode(args.nodeUuid, args.assetUuid);
+            case 'open_for_edit':
+                return await this.openForEdit(args.prefabPath);
+            case 'save':
+                return await this.prefabSave();
+            case 'close':
+                return await this.prefabClose(args.save);
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
         }
@@ -252,6 +307,7 @@ export class PrefabTools implements ToolExecutor {
                     path: prefabPath,
                     nodeCount: validationResult.nodeCount,
                     componentCount: validationResult.componentCount,
+                    editContext: PrefabTools.getEditContext(),
                     message: 'Prefab loaded successfully',
                 },
             };
@@ -1542,7 +1598,7 @@ export class PrefabTools implements ToolExecutor {
             } else if (t) {
                 componentCount++;
                 if (t === 'cc.MissingScript') {
-                    issues.push(`[MissingScript] 索引 ${index}（节点 ${item.node?.__id__ ?? '?'}）存在 MissingScript 组件，脚本可能已删除或未编译`);
+                    issues.push(`[MissingScript] 索引 ${index}（节点 ${item.node?.__id__ ?? '?'}）存在 MissingScript 组件。请先检查 TypeScript 脚本编译错误（查看编辑器 Console 面板是否有红色错误），确认脚本文件存在且 @ccclass 装饰器正确。`);
                 } else if (!t.startsWith('cc.')) {
                     // 自定义脚本组件
                     customScriptComps.push({ index, type: t, item });
@@ -2945,6 +3001,137 @@ export class PrefabTools implements ToolExecutor {
         } catch (error: any) {
             console.error('保存预制体文件时出错:', error);
             return { success: false, error: error.message };
+        }
+    }
+
+    private async openForEdit(prefabPath: string): Promise<ToolResponse> {
+        if (PrefabTools.editState) {
+            return {
+                success: false,
+                error: `Already editing prefab: ${PrefabTools.editState.prefabPath}. Close it first with prefab_close.`
+            };
+        }
+
+        try {
+            const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', prefabPath);
+            if (!assetInfo) {
+                return { success: false, error: `Prefab not found: ${prefabPath}` };
+            }
+
+            const prefabUuid = assetInfo.uuid;
+            const openResult: any = await Editor.Message.request('scene', 'open-scene', prefabUuid);
+            if (openResult && typeof openResult === 'object' && openResult.success === false) {
+                return { success: false, error: `Failed to open prefab: ${JSON.stringify(openResult)}` };
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            const nodeTree: any = await Editor.Message.request('scene', 'query-node-tree');
+            let rootUuid = '';
+            if (nodeTree) {
+                const tree: any = Array.isArray(nodeTree) ? nodeTree[0] : nodeTree;
+                const findRoot = (nodes: any[]): string => {
+                    for (const n of nodes) {
+                        if (n.name && !n.name.startsWith('should_hide')) {
+                            return n.uuid || '';
+                        }
+                        if (n.children && n.children.length > 0) {
+                            const found = findRoot(n.children);
+                            if (found) return found;
+                        }
+                    }
+                    return '';
+                };
+                rootUuid = (tree as any).uuid || findRoot((tree as any).children || []);
+            }
+
+            PrefabTools.editState = {
+                active: true,
+                prefabPath,
+                prefabUuid,
+                rootUuid,
+                openedAt: new Date().toISOString()
+            };
+
+            return {
+                success: true,
+                data: {
+                    prefabPath,
+                    prefabUuid,
+                    rootUuid,
+                    editContext: 'prefab-stage'
+                },
+                message: `Opened prefab for editing: ${prefabPath}`,
+                editContext: 'prefab-stage'
+            };
+        } catch (error: any) {
+            PrefabTools.clearEditState();
+            return { success: false, error: `Failed to open prefab for editing: ${error.message}` };
+        }
+    }
+
+    private async prefabSave(): Promise<ToolResponse> {
+        if (!PrefabTools.editState) {
+            return { success: false, error: 'No prefab is currently being edited. Use prefab_open_for_edit first.' };
+        }
+
+        await this.syncEditState();
+        if (!PrefabTools.editState) {
+            return { success: false, error: 'Prefab edit mode was lost (editor may have closed it). Reopen with prefab_open_for_edit.' };
+        }
+
+        try {
+            const saveResult = await Editor.Message.request('scene', 'save-scene');
+            return {
+                success: true,
+                data: {
+                    prefabPath: PrefabTools.editState.prefabPath,
+                    editContext: 'prefab-stage'
+                },
+                message: `Prefab saved: ${PrefabTools.editState.prefabPath}`,
+                editContext: 'prefab-stage'
+            };
+        } catch (error: any) {
+            return { success: false, error: `Failed to save prefab: ${error.message}`, editContext: 'prefab-stage' };
+        }
+    }
+
+    private async prefabClose(save?: boolean): Promise<ToolResponse> {
+        if (!PrefabTools.editState) {
+            return { success: false, error: 'No prefab is currently being edited.' };
+        }
+
+        try {
+            if (save) {
+                await Editor.Message.request('scene', 'save-scene');
+            }
+
+            const closedPath = PrefabTools.editState.prefabPath;
+            await Editor.Message.request('scene', 'close-scene');
+            PrefabTools.clearEditState();
+
+            return {
+                success: true,
+                data: { closedPrefab: closedPath, editContext: 'scene' },
+                message: `Closed prefab editing mode: ${closedPath}`,
+                editContext: 'scene'
+            };
+        } catch (error: any) {
+            PrefabTools.clearEditState();
+            return { success: false, error: `Failed to close prefab editing mode: ${error.message}`, editContext: 'scene' };
+        }
+    }
+
+    private async syncEditState(): Promise<void> {
+        if (!PrefabTools.editState) return;
+
+        try {
+            const sceneInfo: any = await Editor.Message.request('scene', 'query-node-tree');
+            if (!sceneInfo || !(sceneInfo as any).name || !(sceneInfo as any).name.endsWith('-scene')) {
+                PrefabTools.clearEditState();
+            }
+        } catch {
+            PrefabTools.clearEditState();
         }
     }
 
