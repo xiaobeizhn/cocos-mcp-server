@@ -156,6 +156,23 @@ export interface ToolManagerState {
     configurations: ToolConfiguration[];
 }
 
+export interface ResourceDefinition {
+    uri: string;
+    name: string;
+    description: string;
+    mimeType?: string;
+}
+
+export interface ResourceReadResult {
+    content: string;
+    mimeType?: string;
+}
+
+export interface ResourceProvider {
+    getResources(): ResourceDefinition[];
+    readResource(uri: string, params: Record<string, string>): Promise<ResourceReadResult>;
+}
+
 export type EditContext = 'scene' | 'prefab-stage';
 
 export interface PrefabEditState {

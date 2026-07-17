@@ -89,20 +89,6 @@ export class NodeTools implements ToolExecutor {
                 }
             },
             {
-                name: 'get_node_info',
-                description: 'Get node information by UUID',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        uuid: {
-                            type: 'string',
-                            description: 'Node UUID'
-                        }
-                    },
-                    required: ['uuid']
-                }
-            },
-            {
                 name: 'find_nodes',
                 description: 'Find nodes by name pattern',
                 inputSchema: {
@@ -133,14 +119,6 @@ export class NodeTools implements ToolExecutor {
                         }
                     },
                     required: ['name']
-                }
-            },
-            {
-                name: 'get_all_nodes',
-                description: 'Get all nodes in the scene with their UUIDs',
-                inputSchema: {
-                    type: 'object',
-                    properties: {}
                 }
             },
             {
@@ -282,14 +260,10 @@ export class NodeTools implements ToolExecutor {
         switch (toolName) {
             case 'create_node':
                 return await this.createNode(args);
-            case 'get_node_info':
-                return await this.getNodeInfo(args.uuid);
             case 'find_nodes':
                 return await this.findNodes(args.pattern, args.exactMatch);
             case 'find_node_by_name':
                 return await this.findNodeByName(args.name);
-            case 'get_all_nodes':
-                return await this.getAllNodes();
             case 'set_node_property':
                 return await this.setNodeProperty(args.uuid, args.property, args.value);
             case 'set_node_transform':

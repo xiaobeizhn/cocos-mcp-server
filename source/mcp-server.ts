@@ -1,6 +1,8 @@
 import * as http from 'http';
 import * as url from 'url';
-import { MCPServerSettings, ServerStatus, MCPClient, ToolDefinition } from './types';
+import * as fs from 'fs';
+import * as path from 'path';
+import { MCPServerSettings, ServerStatus, MCPClient, ToolDefinition, ResourceDefinition, ResourceProvider } from './types';
 import { SceneTools } from './tools/scene-tools';
 import { NodeTools } from './tools/node-tools';
 import { ComponentTools } from './tools/component-tools';
@@ -15,6 +17,12 @@ import { SceneViewTools } from './tools/scene-view-tools';
 import { ReferenceImageTools } from './tools/reference-image-tools';
 import { AssetAdvancedTools } from './tools/asset-advanced-tools';
 import { ValidationTools } from './tools/validation-tools';
+import { EditorResources } from './resources/editor-resources';
+import { SceneResources } from './resources/scene-resources';
+import { NodeResources } from './resources/node-resources';
+import { ProjectResources } from './resources/project-resources';
+import { PrefabResources } from './resources/prefab-resources';
+import { DebugResources } from './resources/debug-resources';
 
 export class MCPServer {
     private settings: MCPServerSettings;
@@ -23,10 +31,13 @@ export class MCPServer {
     private tools: Record<string, any> = {};
     private toolsList: ToolDefinition[] = [];
     private enabledTools: any[] = []; // 存储启用的工具列表
+    private resourceProviders: Record<string, ResourceProvider> = {};
+    private resourcesList: ResourceDefinition[] = [];
 
     constructor(settings: MCPServerSettings) {
         this.settings = settings;
         this.initializeTools();
+        this.initializeResources();
     }
 
     private initializeTools(): void {
@@ -50,6 +61,21 @@ export class MCPServer {
         } catch (error) {
             console.error('[MCPServer] Error initializing tools:', error);
             throw error;
+        }
+    }
+
+    private initializeResources(): void {
+        try {
+            console.log('[MCPServer] Initializing resources...');
+            this.resourceProviders.editor = new EditorResources();
+            this.resourceProviders.scene = new SceneResources();
+            this.resourceProviders.node = new NodeResources();
+            this.resourceProviders.project = new ProjectResources();
+            this.resourceProviders.prefab = new PrefabResources();
+            this.resourceProviders.debug = new DebugResources();
+            console.log('[MCPServer] Resources initialized successfully');
+        } catch (error) {
+            console.error('[MCPServer] Error initializing resources:', error);
         }
     }
 
@@ -80,6 +106,7 @@ export class MCPServer {
             });
 
             this.setupTools();
+            this.setupResources();
             console.log('[MCPServer] 🚀 MCP Server is ready for connections');
         } catch (error) {
             console.error('[MCPServer] ❌ Failed to start server:', error);
@@ -122,6 +149,60 @@ export class MCPServer {
         }
         
         console.log(`[MCPServer] Setup tools: ${this.toolsList.length} tools available`);
+    }
+
+    private setupResources(): void {
+        this.resourcesList = [];
+        for (const [, provider] of Object.entries(this.resourceProviders)) {
+            const resources = provider.getResources();
+            for (const resource of resources) {
+                this.resourcesList.push(resource);
+            }
+        }
+        console.log(`[MCPServer] Setup resources: ${this.resourcesList.length} resources available`);
+    }
+
+    private matchResourceUri(requestedUri: string): { provider: ResourceProvider; params: Record<string, string> } | null {
+        // Split URI and query params
+        const [uriPath, queryString] = requestedUri.split('?');
+        const queryParams: Record<string, string> = {};
+
+        if (queryString) {
+            for (const part of queryString.split('&')) {
+                const [key, value] = part.split('=');
+                if (key && value !== undefined) {
+                    queryParams[decodeURIComponent(key)] = decodeURIComponent(value);
+                }
+            }
+        }
+
+        for (const [, provider] of Object.entries(this.resourceProviders)) {
+            for (const def of provider.getResources()) {
+                const params = this.extractUriParams(def.uri, uriPath);
+                if (params !== null) {
+                    return { provider, params: { ...params, ...queryParams } };
+                }
+            }
+        }
+        return null;
+    }
+
+    private extractUriParams(pattern: string, uri: string): Record<string, string> | null {
+        const paramNames: string[] = [];
+        const regexStr = '^' + pattern.replace(/\{([^}]+)\}/g, (_match, name) => {
+            paramNames.push(name);
+            return '([^/?]+)';
+        }) + '$';
+
+        const regex = new RegExp(regexStr);
+        const match = uri.match(regex);
+        if (!match) return null;
+
+        const params: Record<string, string> = {};
+        for (let i = 0; i < paramNames.length; i++) {
+            params[paramNames[i]] = decodeURIComponent(match[i + 1]);
+        }
+        return params;
     }
 
     public getFilteredTools(enabledTools: any[]): ToolDefinition[] {
@@ -183,7 +264,7 @@ export class MCPServer {
                 await this.handleMCPRequest(req, res);
             } else if (pathname === '/health' && req.method === 'GET') {
                 res.writeHead(200);
-                res.end(JSON.stringify({ status: 'ok', tools: this.toolsList.length }));
+                res.end(JSON.stringify({ status: 'ok', tools: this.toolsList.length, resources: this.resourcesList.length }));
             } else if (pathname?.startsWith('/api/') && req.method === 'POST') {
                 await this.handleSimpleAPIRequest(req, res, pathname);
             } else if (pathname === '/api/tools' && req.method === 'GET') {
@@ -257,16 +338,50 @@ export class MCPServer {
                     const toolResult = await this.executeToolCall(name, args);
                     result = { content: [{ type: 'text', text: JSON.stringify(toolResult) }] };
                     break;
+                case 'resources/list':
+                    result = {
+                        resources: this.resourcesList.map(r => ({
+                            uri: r.uri,
+                            name: r.name,
+                            description: r.description,
+                            mimeType: r.mimeType || 'application/json'
+                        }))
+                    };
+                    break;
+                case 'resources/read':
+                    const { uri: resourceUri } = params;
+                    const resourceMatch = this.matchResourceUri(resourceUri);
+                    if (!resourceMatch) {
+                        throw new Error(`Resource not found: ${resourceUri}`);
+                    }
+                    const resourceUriPath = resourceUri.split('?')[0];
+                    const readResult = await resourceMatch.provider.readResource(resourceUriPath, resourceMatch.params);
+                    result = {
+                        contents: [{
+                            uri: resourceUriPath,
+                            mimeType: readResult.mimeType || 'application/json',
+                            text: readResult.content
+                        }]
+                    };
+                    break;
                 case 'initialize':
                     // MCP initialization
+                    const pkgPath = path.join(__dirname, '..', 'package.json');
+                    let serverVersion = '1.0.0';
+                    try {
+                        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+                        serverVersion = pkg.version || serverVersion;
+                    } catch { /* ignore */ }
+
                     result = {
                         protocolVersion: '2024-11-05',
                         capabilities: {
-                            tools: {}
+                            tools: { listChanged: true },
+                            resources: { subscribe: true, listChanged: true }
                         },
                         serverInfo: {
                             name: 'cocos-mcp-server',
-                            version: '1.0.0'
+                            version: serverVersion
                         }
                     };
                     break;

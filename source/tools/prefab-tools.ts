@@ -20,20 +20,6 @@ export class PrefabTools implements ToolExecutor {
     getTools(): ToolDefinition[] {
         return [
             {
-                name: 'get_prefab_list',
-                description: 'Get all prefabs in the project',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        folder: {
-                            type: 'string',
-                            description: 'Folder path to search (optional)',
-                            default: 'db://assets'
-                        }
-                    }
-                }
-            },
-            {
                 name: 'load_prefab',
                 description: 'Load a prefab by path',
                 inputSchema: {
@@ -126,20 +112,6 @@ export class PrefabTools implements ToolExecutor {
                         }
                     },
                     required: ['nodeUuid']
-                }
-            },
-            {
-                name: 'get_prefab_info',
-                description: 'Get detailed prefab information',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        prefabPath: {
-                            type: 'string',
-                            description: 'Prefab asset path'
-                        }
-                    },
-                    required: ['prefabPath']
                 }
             },
             {
@@ -237,8 +209,6 @@ export class PrefabTools implements ToolExecutor {
 
     async execute(toolName: string, args: any): Promise<ToolResponse> {
         switch (toolName) {
-            case 'get_prefab_list':
-                return await this.getPrefabList(args.folder);
             case 'load_prefab':
                 return await this.loadPrefab(args.prefabPath);
             case 'instantiate_prefab':
@@ -249,8 +219,6 @@ export class PrefabTools implements ToolExecutor {
                 return await this.updatePrefab(args.prefabPath, args.nodeUuid);
             case 'revert_prefab':
                 return await this.revertPrefab(args.nodeUuid);
-            case 'get_prefab_info':
-                return await this.getPrefabInfo(args.prefabPath);
             case 'validate_prefab':
                 return await this.validatePrefab(args.prefabPath);
             case 'duplicate_prefab':
@@ -266,27 +234,6 @@ export class PrefabTools implements ToolExecutor {
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
         }
-    }
-
-    private async getPrefabList(folder: string = 'db://assets'): Promise<ToolResponse> {
-        return new Promise((resolve) => {
-            const pattern = folder.endsWith('/') ? 
-                `${folder}**/*.prefab` : `${folder}/**/*.prefab`;
-            
-            Editor.Message.request('asset-db', 'query-assets', {
-                pattern: pattern
-            }).then((results: any[]) => {
-                const prefabs: PrefabInfo[] = results.map(asset => ({
-                    name: asset.name,
-                    path: asset.url,
-                    uuid: asset.uuid,
-                    folder: asset.url.substring(0, asset.url.lastIndexOf('/'))
-                }));
-                resolve({ success: true, data: prefabs });
-            }).catch((err: Error) => {
-                resolve({ success: false, error: err.message });
-            });
-        });
     }
 
     private async loadPrefab(prefabPath: string): Promise<ToolResponse> {

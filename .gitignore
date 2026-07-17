@@ -1,4 +1,11 @@
 node_modules/
 .claude/
 .cursor/
+.codegraph/
+.vscode/
+.idea/
 **/*.local.json
+*.log
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

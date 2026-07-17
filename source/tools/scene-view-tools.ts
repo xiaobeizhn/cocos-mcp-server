@@ -19,14 +19,6 @@ export class SceneViewTools implements ToolExecutor {
                 }
             },
             {
-                name: 'query_gizmo_tool_name',
-                description: 'Get current Gizmo tool name',
-                inputSchema: {
-                    type: 'object',
-                    properties: {}
-                }
-            },
-            {
                 name: 'change_gizmo_pivot',
                 description: 'Change transform pivot point',
                 inputSchema: {
@@ -39,14 +31,6 @@ export class SceneViewTools implements ToolExecutor {
                         }
                     },
                     required: ['name']
-                }
-            },
-            {
-                name: 'query_gizmo_pivot',
-                description: 'Get current Gizmo pivot point',
-                inputSchema: {
-                    type: 'object',
-                    properties: {}
                 }
             },
             {
@@ -70,14 +54,6 @@ export class SceneViewTools implements ToolExecutor {
                         }
                     },
                     required: ['type']
-                }
-            },
-            {
-                name: 'query_gizmo_coordinate',
-                description: 'Get current coordinate system',
-                inputSchema: {
-                    type: 'object',
-                    properties: {}
                 }
             },
             {
@@ -226,18 +202,12 @@ export class SceneViewTools implements ToolExecutor {
         switch (toolName) {
             case 'change_gizmo_tool':
                 return await this.changeGizmoTool(args.name);
-            case 'query_gizmo_tool_name':
-                return await this.queryGizmoToolName();
             case 'change_gizmo_pivot':
                 return await this.changeGizmoPivot(args.name);
-            case 'query_gizmo_pivot':
-                return await this.queryGizmoPivot();
             case 'query_gizmo_view_mode':
                 return await this.queryGizmoViewMode();
             case 'change_gizmo_coordinate':
                 return await this.changeGizmoCoordinate(args.type);
-            case 'query_gizmo_coordinate':
-                return await this.queryGizmoCoordinate();
             case 'change_view_mode_2d_3d':
                 return await this.changeViewMode2D3D(args.is2D);
             case 'query_view_mode_2d_3d':

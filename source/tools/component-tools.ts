@@ -41,38 +41,6 @@ export class ComponentTools implements ToolExecutor {
                 }
             },
             {
-                name: 'get_components',
-                description: 'Get all components of a node',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        nodeUuid: {
-                            type: 'string',
-                            description: 'Node UUID'
-                        }
-                    },
-                    required: ['nodeUuid']
-                }
-            },
-            {
-                name: 'get_component_info',
-                description: 'Get specific component information',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        nodeUuid: {
-                            type: 'string',
-                            description: 'Node UUID'
-                        },
-                        componentType: {
-                            type: 'string',
-                            description: 'Component type to get info for'
-                        }
-                    },
-                    required: ['nodeUuid', 'componentType']
-                }
-            },
-            {
                 name: 'set_component_property',
                 description: 'Set component property values for UI components or custom script components. Supports setting properties of built-in UI components (e.g., cc.Label, cc.Sprite) and custom script components. Note: For node basic properties (name, active, layer, etc.), use set_node_property. For node transform properties (position, rotation, scale, etc.), use set_node_transform.',
                 inputSchema: {
@@ -189,10 +157,6 @@ export class ComponentTools implements ToolExecutor {
                 return await this.addComponent(args.nodeUuid, args.componentType);
             case 'remove_component':
                 return await this.removeComponent(args.nodeUuid, args.componentType);
-            case 'get_components':
-                return await this.getComponents(args.nodeUuid);
-            case 'get_component_info':
-                return await this.getComponentInfo(args.nodeUuid, args.componentType);
             case 'set_component_property':
                 return await this.setComponentProperty(args);
             case 'attach_script':

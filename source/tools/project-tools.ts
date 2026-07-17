@@ -41,29 +41,6 @@ export class ProjectTools implements ToolExecutor {
                 }
             },
             {
-                name: 'get_project_info',
-                description: 'Get project information',
-                inputSchema: {
-                    type: 'object',
-                    properties: {}
-                }
-            },
-            {
-                name: 'get_project_settings',
-                description: 'Get project settings',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        category: {
-                            type: 'string',
-                            description: 'Settings category',
-                            enum: ['general', 'physics', 'render', 'assets'],
-                            default: 'general'
-                        }
-                    }
-                }
-            },
-            {
                 name: 'refresh_assets',
                 description: 'Refresh asset database',
                 inputSchema: {
@@ -106,26 +83,6 @@ export class ProjectTools implements ToolExecutor {
                         }
                     },
                     required: ['assetPath']
-                }
-            },
-            {
-                name: 'get_assets',
-                description: 'Get assets by type',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        type: {
-                            type: 'string',
-                            description: 'Asset type filter',
-                            enum: ['all', 'scene', 'prefab', 'script', 'texture', 'material', 'mesh', 'audio', 'animation'],
-                            default: 'all'
-                        },
-                        folder: {
-                            type: 'string',
-                            description: 'Folder to search in',
-                            default: 'db://assets'
-                        }
-                    }
                 }
             },
             {
@@ -397,18 +354,12 @@ export class ProjectTools implements ToolExecutor {
                 return await this.runProject(args.platform);
             case 'build_project':
                 return await this.buildProject(args);
-            case 'get_project_info':
-                return await this.getProjectInfo();
-            case 'get_project_settings':
-                return await this.getProjectSettings(args.category);
             case 'refresh_assets':
                 return await this.refreshAssets(args.folder);
             case 'import_asset':
                 return await this.importAsset(args.sourcePath, args.targetFolder);
             case 'get_asset_info':
                 return await this.getAssetInfo(args.assetPath);
-            case 'get_assets':
-                return await this.getAssets(args.type, args.folder);
             case 'get_build_settings':
                 return await this.getBuildSettings();
             case 'open_build_panel':
@@ -484,56 +435,6 @@ export class ProjectTools implements ToolExecutor {
                     data: { 
                         platform: args.platform,
                         instruction: "Use the build panel to configure and start the build process"
-                    }
-                });
-            }).catch((err: Error) => {
-                resolve({ success: false, error: err.message });
-            });
-        });
-    }
-
-    private async getProjectInfo(): Promise<ToolResponse> {
-        return new Promise((resolve) => {
-            const info: ProjectInfo = {
-                name: Editor.Project.name,
-                path: Editor.Project.path,
-                uuid: Editor.Project.uuid,
-                version: (Editor.Project as any).version || '1.0.0',
-                cocosVersion: (Editor as any).versions?.cocos || 'Unknown'
-            };
-
-            // Note: 'query-info' API doesn't exist, using 'query-config' instead
-            Editor.Message.request('project', 'query-config', 'project').then((additionalInfo: any) => {
-                if (additionalInfo) {
-                    Object.assign(info, { config: additionalInfo });
-                }
-                resolve({ success: true, data: info });
-            }).catch(() => {
-                // Return basic info even if detailed query fails
-                resolve({ success: true, data: info });
-            });
-        });
-    }
-
-    private async getProjectSettings(category: string = 'general'): Promise<ToolResponse> {
-        return new Promise((resolve) => {
-            // 使用正确的 project API 查询项目配置
-            const configMap: Record<string, string> = {
-                general: 'project',
-                physics: 'physics',
-                render: 'render',
-                assets: 'asset-db'
-            };
-
-            const configName = configMap[category] || 'project';
-
-            Editor.Message.request('project', 'query-config', configName).then((settings: any) => {
-                resolve({
-                    success: true,
-                    data: {
-                        category: category,
-                        config: settings,
-                        message: `${category} settings retrieved successfully`
                     }
                 });
             }).catch((err: Error) => {

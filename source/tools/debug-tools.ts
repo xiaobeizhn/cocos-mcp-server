@@ -32,26 +32,6 @@ export class DebugTools implements ToolExecutor {
     getTools(): ToolDefinition[] {
         return [
             {
-                name: 'get_console_logs',
-                description: 'Get editor console logs',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        limit: {
-                            type: 'number',
-                            description: 'Number of recent logs to retrieve',
-                            default: 100
-                        },
-                        filter: {
-                            type: 'string',
-                            description: 'Filter logs by type',
-                            enum: ['all', 'log', 'warn', 'error', 'info'],
-                            default: 'all'
-                        }
-                    }
-                }
-            },
-            {
                 name: 'clear_console',
                 description: 'Clear editor console',
                 inputSchema: {
@@ -92,14 +72,6 @@ export class DebugTools implements ToolExecutor {
                 }
             },
             {
-                name: 'get_performance_stats',
-                description: 'Get performance statistics',
-                inputSchema: {
-                    type: 'object',
-                    properties: {}
-                }
-            },
-            {
                 name: 'validate_scene',
                 description: 'Validate current scene for issues',
                 inputSchema: {
@@ -116,14 +88,6 @@ export class DebugTools implements ToolExecutor {
                             default: true
                         }
                     }
-                }
-            },
-            {
-                name: 'get_editor_info',
-                description: 'Get editor and environment information',
-                inputSchema: {
-                    type: 'object',
-                    properties: {}
                 }
             },
             {
@@ -193,20 +157,14 @@ export class DebugTools implements ToolExecutor {
 
     async execute(toolName: string, args: any): Promise<ToolResponse> {
         switch (toolName) {
-            case 'get_console_logs':
-                return await this.getConsoleLogs(args.limit, args.filter);
             case 'clear_console':
                 return await this.clearConsole();
             case 'execute_script':
                 return await this.executeScript(args.script);
             case 'get_node_tree':
                 return await this.getNodeTree(args.rootUuid, args.maxDepth);
-            case 'get_performance_stats':
-                return await this.getPerformanceStats();
             case 'validate_scene':
                 return await this.validateScene(args);
-            case 'get_editor_info':
-                return await this.getEditorInfo();
             case 'get_project_logs':
                 return await this.getProjectLogs(args.lines, args.filterKeyword, args.logLevel);
             case 'get_log_file_info':
@@ -216,25 +174,6 @@ export class DebugTools implements ToolExecutor {
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
         }
-    }
-
-    private async getConsoleLogs(limit: number = 100, filter: string = 'all'): Promise<ToolResponse> {
-        let logs = this.consoleMessages;
-        
-        if (filter !== 'all') {
-            logs = logs.filter(log => log.type === filter);
-        }
-
-        const recentLogs = logs.slice(-limit);
-        
-        return {
-            success: true,
-            data: {
-                total: logs.length,
-                returned: recentLogs.length,
-                logs: recentLogs
-            }
-        };
     }
 
     private async clearConsole(): Promise<ToolResponse> {
@@ -323,29 +262,6 @@ export class DebugTools implements ToolExecutor {
         });
     }
 
-    private async getPerformanceStats(): Promise<ToolResponse> {
-        return new Promise((resolve) => {
-            Editor.Message.request('scene', 'query-performance').then((stats: any) => {
-                const perfStats: PerformanceStats = {
-                    nodeCount: stats.nodeCount || 0,
-                    componentCount: stats.componentCount || 0,
-                    drawCalls: stats.drawCalls || 0,
-                    triangles: stats.triangles || 0,
-                    memory: stats.memory || {}
-                };
-                resolve({ success: true, data: perfStats });
-            }).catch(() => {
-                // Fallback to basic stats
-                resolve({
-                    success: true,
-                    data: {
-                        message: 'Performance stats not available in edit mode'
-                    }
-                });
-            });
-        });
-    }
-
     private async validateScene(options: any): Promise<ToolResponse> {
         const issues: ValidationIssue[] = [];
 
@@ -398,27 +314,6 @@ export class DebugTools implements ToolExecutor {
             }
         }
         return count;
-    }
-
-    private async getEditorInfo(): Promise<ToolResponse> {
-        const info = {
-            editor: {
-                version: (Editor as any).versions?.editor || 'Unknown',
-                cocosVersion: (Editor as any).versions?.cocos || 'Unknown',
-                platform: process.platform,
-                arch: process.arch,
-                nodeVersion: process.version
-            },
-            project: {
-                name: Editor.Project.name,
-                path: Editor.Project.path,
-                uuid: Editor.Project.uuid
-            },
-            memory: process.memoryUsage(),
-            uptime: process.uptime()
-        };
-
-        return { success: true, data: info };
     }
 
     private async getProjectLogs(lines: number = 100, filterKeyword?: string, logLevel: string = 'ALL'): Promise<ToolResponse> {

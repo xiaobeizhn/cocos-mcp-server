@@ -4,22 +4,6 @@ export class SceneTools implements ToolExecutor {
     getTools(): ToolDefinition[] {
         return [
             {
-                name: 'get_current_scene',
-                description: 'Get current scene information',
-                inputSchema: {
-                    type: 'object',
-                    properties: {}
-                }
-            },
-            {
-                name: 'get_scene_list',
-                description: 'Get all scenes in the project',
-                inputSchema: {
-                    type: 'object',
-                    properties: {}
-                }
-            },
-            {
                 name: 'open_scene',
                 description: 'Open a scene by path',
                 inputSchema: {
@@ -80,30 +64,12 @@ export class SceneTools implements ToolExecutor {
                     type: 'object',
                     properties: {}
                 }
-            },
-            {
-                name: 'get_scene_hierarchy',
-                description: 'Get the complete hierarchy of current scene',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        includeComponents: {
-                            type: 'boolean',
-                            description: 'Include component information',
-                            default: false
-                        }
-                    }
-                }
             }
         ];
     }
 
     async execute(toolName: string, args: any): Promise<ToolResponse> {
         switch (toolName) {
-            case 'get_current_scene':
-                return await this.getCurrentScene();
-            case 'get_scene_list':
-                return await this.getSceneList();
             case 'open_scene':
                 return await this.openScene(args.scenePath);
             case 'save_scene':
@@ -114,46 +80,9 @@ export class SceneTools implements ToolExecutor {
                 return await this.saveSceneAs(args.path);
             case 'close_scene':
                 return await this.closeScene();
-            case 'get_scene_hierarchy':
-                return await this.getSceneHierarchy(args.includeComponents);
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
         }
-    }
-
-    private async getCurrentScene(): Promise<ToolResponse> {
-        return new Promise((resolve) => {
-            // 直接使用 query-node-tree 来获取场景信息（这个方法已经验证可用）
-            Editor.Message.request('scene', 'query-node-tree').then((tree: any) => {
-                if (tree && tree.uuid) {
-                    resolve({
-                        success: true,
-                        data: {
-                            name: tree.name || 'Current Scene',
-                            uuid: tree.uuid,
-                            type: tree.type || 'cc.Scene',
-                            active: tree.active !== undefined ? tree.active : true,
-                            nodeCount: tree.children ? tree.children.length : 0
-                        }
-                    });
-                } else {
-                    resolve({ success: false, error: 'No scene data available' });
-                }
-            }).catch((err: Error) => {
-                // 备用方案：使用场景脚本
-                const options = {
-                    name: 'cocos-mcp-server',
-                    method: 'getCurrentSceneInfo',
-                    args: []
-                };
-                
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
-                    resolve(result);
-                }).catch((err2: Error) => {
-                    resolve({ success: false, error: `Direct API failed: ${err.message}, Scene script failed: ${err2.message}` });
-                });
-            });
-        });
     }
 
     private async getSceneList(): Promise<ToolResponse> {
@@ -393,61 +322,6 @@ export class SceneTools implements ToolExecutor {
                 resolve({ success: false, error: err.message });
             });
         });
-    }
-
-    private async getSceneHierarchy(includeComponents: boolean = false): Promise<ToolResponse> {
-        return new Promise((resolve) => {
-            // 优先尝试使用 Editor API 查询场景节点树
-            Editor.Message.request('scene', 'query-node-tree').then((tree: any) => {
-                if (tree) {
-                    const hierarchy = this.buildHierarchy(tree, includeComponents);
-                    resolve({
-                        success: true,
-                        data: hierarchy
-                    });
-                } else {
-                    resolve({ success: false, error: 'No scene hierarchy available' });
-                }
-            }).catch((err: Error) => {
-                // 备用方案：使用场景脚本
-                const options = {
-                    name: 'cocos-mcp-server',
-                    method: 'getSceneHierarchy',
-                    args: [includeComponents]
-                };
-                
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
-                    resolve(result);
-                }).catch((err2: Error) => {
-                    resolve({ success: false, error: `Direct API failed: ${err.message}, Scene script failed: ${err2.message}` });
-                });
-            });
-        });
-    }
-
-    private buildHierarchy(node: any, includeComponents: boolean): any {
-        const nodeInfo: any = {
-            uuid: node.uuid,
-            name: node.name,
-            type: node.type,
-            active: node.active,
-            children: []
-        };
-
-        if (includeComponents && node.__comps__) {
-            nodeInfo.components = node.__comps__.map((comp: any) => ({
-                type: comp.__type__ || 'Unknown',
-                enabled: comp.enabled !== undefined ? comp.enabled : true
-            }));
-        }
-
-        if (node.children) {
-            nodeInfo.children = node.children.map((child: any) => 
-                this.buildHierarchy(child, includeComponents)
-            );
-        }
-
-        return nodeInfo;
     }
 
     private async saveSceneAs(path: string): Promise<ToolResponse> {

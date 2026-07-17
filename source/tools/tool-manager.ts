@@ -11,11 +11,66 @@ export class ToolManager {
     constructor() {
         this.settings = this.readToolManagerSettings();
         this.initializeAvailableTools();
-        
+
         // 如果没有配置，自动创建一个默认配置
         if (this.settings.configurations.length === 0) {
             console.log('[ToolManager] No configurations found, creating default configuration...');
             this.createConfiguration('默认配置', '自动创建的默认工具配置');
+        } else {
+            // 同步已有配置与当前代码中的工具列表
+            this.syncConfigurationsWithAvailableTools();
+        }
+    }
+
+    /**
+     * 将所有已有配置与当前代码中的工具列表同步：
+     * - 新增的工具自动添加到配置中（默认启用）
+     * - 已移除的工具从配置中删除
+     * 这样 MCP 更新后不需要手动删除缓存文件
+     */
+    private syncConfigurationsWithAvailableTools(): void {
+        const currentToolKeys = new Set(
+            this.availableTools.map(t => `${t.category}::${t.name}`)
+        );
+
+        let changed = false;
+        for (const config of this.settings.configurations) {
+            const configToolKeys = new Set(
+                config.tools.map(t => `${t.category}::${t.name}`)
+            );
+
+            // 找出需要新增的工具（代码中有但配置中没有）
+            const newTools = this.availableTools.filter(
+                t => !configToolKeys.has(`${t.category}::${t.name}`)
+            );
+            // 找出需要移除的工具（配置中有但代码中没有）
+            const removedKeys = [...configToolKeys].filter(
+                k => !currentToolKeys.has(k)
+            );
+
+            if (newTools.length > 0 || removedKeys.length > 0) {
+                changed = true;
+
+                // 添加新工具
+                for (const tool of newTools) {
+                    config.tools.push({ ...tool, enabled: true });
+                }
+
+                // 移除过时工具
+                config.tools = config.tools.filter(
+                    t => !removedKeys.includes(`${t.category}::${t.name}`)
+                );
+
+                config.updatedAt = new Date().toISOString();
+
+                console.log(
+                    `[ToolManager] Synced config "${config.name}": +${newTools.length} added, -${removedKeys.length} removed, total=${config.tools.length}`
+                );
+            }
+        }
+
+        if (changed) {
+            this.saveSettings();
         }
     }
 
