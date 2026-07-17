@@ -1,5 +1,6 @@
 import { ResourceProvider, ResourceDefinition, ResourceReadResult } from '../types';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class ProjectResources implements ResourceProvider {
     getResources(): ResourceDefinition[] {
         return [
@@ -44,7 +45,7 @@ export class ProjectResources implements ResourceProvider {
         };
 
         try {
-            const config: any = await Editor.Message.request('project', 'query-config', 'project');
+            const config: any = await editorMessages.request('project', 'query-config', 'project');
             if (config) {
                 (content as any).config = config;
             }
@@ -78,7 +79,7 @@ export class ProjectResources implements ResourceProvider {
         }
 
         try {
-            const results: any[] = await Editor.Message.request('asset-db', 'query-assets', { pattern });
+            const results: any[] = await editorMessages.request('asset-db', 'query-assets', { pattern });
             const assets = results.map(asset => ({
                 name: asset.name,
                 uuid: asset.uuid,
@@ -117,7 +118,7 @@ export class ProjectResources implements ResourceProvider {
         const configName = configMap[category] || 'project';
 
         try {
-            const settings: any = await Editor.Message.request('project', 'query-config', configName);
+            const settings: any = await editorMessages.request('project', 'query-config', configName);
             return { content: JSON.stringify({ category, config: settings }) };
         } catch (err: any) {
             throw new Error(`Failed to get ${category} settings: ${err.message}`);

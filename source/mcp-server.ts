@@ -2,7 +2,9 @@ import * as http from 'http';
 import * as url from 'url';
 import * as fs from 'fs';
 import * as path from 'path';
-import { MCPServerSettings, ServerStatus, MCPClient, ToolDefinition, ResourceDefinition, ResourceProvider } from './types';
+import { MCPServerSettings, ServerStatus, MCPClient, ToolDefinition, ResourceDefinition, ResourceProvider, ToolExecutor, ToolResponse } from './types';
+import { McpError, normalizeError, normalizeToolResponse, toJsonRpcError, toRestStatus, toolFailure } from './services/error-normalizer';
+import { editorMessages } from './services/default-editor-message-client';
 import { SceneTools } from './tools/scene-tools';
 import { NodeTools } from './tools/node-tools';
 import { ComponentTools } from './tools/component-tools';
@@ -214,16 +216,21 @@ export class MCPServer {
         return this.toolsList.filter(tool => enabledToolNames.has(tool.name));
     }
 
-    public async executeToolCall(toolName: string, args: any): Promise<any> {
+    public async executeToolCall(toolName: string, args: any): Promise<ToolResponse> {
         const parts = toolName.split('_');
         const category = parts[0];
         const toolMethodName = parts.slice(1).join('_');
-        
-        if (this.tools[category]) {
-            return await this.tools[category].execute(toolMethodName, args);
+        const executor = this.tools[category] as ToolExecutor | undefined;
+
+        if (!executor) {
+            return toolFailure(new McpError('TOOL_NOT_FOUND', `Tool ${toolName} not found`, { details: { toolName } }));
         }
-        
-        throw new Error(`Tool ${toolName} not found`);
+
+        try {
+            return normalizeToolResponse(await executor.execute(toolMethodName, args), { toolName });
+        } catch (error) {
+            return toolFailure(error, 'INTERNAL_ERROR', { toolName });
+        }
     }
 
     public getClients(): MCPClient[] {
@@ -334,9 +341,14 @@ export class MCPServer {
                     result = { tools: this.getAvailableTools() };
                     break;
                 case 'tools/call':
-                    const { name, arguments: args } = params;
-                    const toolResult = await this.executeToolCall(name, args);
-                    result = { content: [{ type: 'text', text: JSON.stringify(toolResult) }] };
+                    if (!params || typeof params.name !== 'string') {
+                        throw new McpError('INVALID_ARGUMENT', 'tools/call requires a tool name');
+                    }
+                    const toolResult = await this.executeToolCall(params.name, params.arguments ?? {});
+                    result = {
+                        content: [{ type: 'text', text: JSON.stringify(toolResult) }],
+                        ...(toolResult.success ? {} : { isError: true })
+                    };
                     break;
                 case 'resources/list':
                     result = {
@@ -349,10 +361,13 @@ export class MCPServer {
                     };
                     break;
                 case 'resources/read':
-                    const { uri: resourceUri } = params;
+                    if (!params || typeof params.uri !== 'string') {
+                        throw new McpError('INVALID_ARGUMENT', 'resources/read requires a resource URI');
+                    }
+                    const resourceUri = params.uri;
                     const resourceMatch = this.matchResourceUri(resourceUri);
                     if (!resourceMatch) {
-                        throw new Error(`Resource not found: ${resourceUri}`);
+                        throw new McpError('RESOURCE_NOT_FOUND', `Resource not found: ${resourceUri}`, { details: { uri: resourceUri } });
                     }
                     const resourceUriPath = resourceUri.split('?')[0];
                     const readResult = await resourceMatch.provider.readResource(resourceUriPath, resourceMatch.params);
@@ -386,7 +401,7 @@ export class MCPServer {
                     };
                     break;
                 default:
-                    throw new Error(`Unknown method: ${method}`);
+                    throw new McpError('METHOD_NOT_FOUND', `Unknown method: ${method}`, { details: { method } });
             }
 
             return {
@@ -395,13 +410,11 @@ export class MCPServer {
                 result
             };
         } catch (error: any) {
+            const normalized = normalizeError(error);
             return {
                 jsonrpc: '2.0',
                 id,
-                error: {
-                    code: -32603,
-                    message: error.message
-                }
+                error: toJsonRpcError(normalized)
             };
         }
     }

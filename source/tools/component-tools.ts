@@ -1,6 +1,7 @@
 import { ToolDefinition, ToolResponse, ToolExecutor, ComponentInfo } from '../types';
 import { PrefabTools } from './prefab-tools';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class ComponentTools implements ToolExecutor {
     getTools(): ToolDefinition[] {
         return [
@@ -190,7 +191,7 @@ export class ComponentTools implements ToolExecutor {
                 }
             }
             // 尝试直接使用 Editor API 添加组件
-            Editor.Message.request('scene', 'create-component', {
+            editorMessages.request('scene', 'create-component', {
                 uuid: nodeUuid,
                 component: componentType
             }).then(async (result: any) => {
@@ -238,7 +239,7 @@ export class ComponentTools implements ToolExecutor {
                     method: 'addComponentToNode',
                     args: [nodeUuid, componentType]
                 };
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
+                editorMessages.request('scene', 'execute-scene-script', options).then((result: any) => {
                     resolve(result);
                 }).catch((err2: Error) => {
                     resolve({ success: false, error: `Direct API failed: ${err.message}, Scene script failed: ${err2.message}` });
@@ -268,7 +269,7 @@ export class ComponentTools implements ToolExecutor {
                 return;
             }
             try {
-                await Editor.Message.request('scene', 'remove-component', {
+                await editorMessages.request('scene', 'remove-component', {
                     uuid: compUuid
                 });
             } catch (err: any) {
@@ -294,7 +295,7 @@ export class ComponentTools implements ToolExecutor {
     private async getComponents(nodeUuid: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // 优先尝试直接使用 Editor API 查询节点信息
-            Editor.Message.request('scene', 'query-node', nodeUuid).then((nodeData: any) => {
+            editorMessages.request('scene', 'query-node', nodeUuid).then((nodeData: any) => {
                 if (nodeData && nodeData.__comps__) {
                     const components = nodeData.__comps__.map((comp: any) => {
                         const props = this.extractComponentProperties(comp);
@@ -329,7 +330,7 @@ export class ComponentTools implements ToolExecutor {
                     args: [nodeUuid]
                 };
                 
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
+                editorMessages.request('scene', 'execute-scene-script', options).then((result: any) => {
                     if (result.success) {
                         resolve({
                             success: true,
@@ -348,7 +349,7 @@ export class ComponentTools implements ToolExecutor {
     private async getComponentInfo(nodeUuid: string, componentType: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // 优先尝试直接使用 Editor API 查询节点信息
-            Editor.Message.request('scene', 'query-node', nodeUuid).then((nodeData: any) => {
+            editorMessages.request('scene', 'query-node', nodeUuid).then((nodeData: any) => {
                 if (nodeData && nodeData.__comps__) {
                     const component = nodeData.__comps__.find((comp: any) => {
                         const compType = comp.__type__ || comp.cid || comp.type;
@@ -380,7 +381,7 @@ export class ComponentTools implements ToolExecutor {
                     args: [nodeUuid]
                 };
                 
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
+                editorMessages.request('scene', 'execute-scene-script', options).then((result: any) => {
                     if (result.success && result.data.components) {
                         const component = result.data.components.find((comp: any) => comp.type === componentType);
                         if (component) {
@@ -435,7 +436,7 @@ export class ComponentTools implements ToolExecutor {
             return null;
         }
         try {
-            const nodeTree = await Editor.Message.request('scene', 'query-node-tree');
+            const nodeTree = await editorMessages.request('scene', 'query-node-tree');
             if (!nodeTree) {
                 console.warn('[findComponentTypeByUuid] Failed to query node tree.');
                 return null;
@@ -450,7 +451,7 @@ export class ComponentTools implements ToolExecutor {
                 }
 
                 try {
-                    const fullNodeData = await Editor.Message.request('scene', 'query-node', currentNodeInfo.uuid);
+                    const fullNodeData = await editorMessages.request('scene', 'query-node', currentNodeInfo.uuid);
                     if (fullNodeData && fullNodeData.__comps__) {
                         for (const comp of fullNodeData.__comps__) {
                             const compAny = comp as any; // Cast to any to access dynamic properties
@@ -700,7 +701,7 @@ export class ComponentTools implements ToolExecutor {
                 let actualExpectedValue = processedValue;
                 
                 // Step 5: 获取原始节点数据来构建正确的路径
-                const rawNodeData = await Editor.Message.request('scene', 'query-node', nodeUuid);
+                const rawNodeData = await editorMessages.request('scene', 'query-node', nodeUuid);
                 if (!rawNodeData || !rawNodeData.__comps__) {
                     resolve({
                         success: false,
@@ -756,7 +757,7 @@ export class ComponentTools implements ToolExecutor {
                         assetType = 'cc.Prefab';
                     }
                     
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: propertyPath,
                         dump: { 
@@ -770,14 +771,14 @@ export class ComponentTools implements ToolExecutor {
                     const height = Number(value.height) || 100;
                     
                     // Set width first
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: `__comps__.${rawComponentIndex}.width`,
                         dump: { value: width }
                     });
                     
                     // Then set height
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: `__comps__.${rawComponentIndex}.height`,
                         dump: { value: height }
@@ -788,14 +789,14 @@ export class ComponentTools implements ToolExecutor {
                     const anchorY = Number(value.y) || 0.5;
                     
                     // Set anchorX first
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: `__comps__.${rawComponentIndex}.anchorX`,
                         dump: { value: anchorX }
                     });
                     
                     // Then set anchorY  
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: `__comps__.${rawComponentIndex}.anchorY`,
                         dump: { value: anchorY }
@@ -812,7 +813,7 @@ export class ComponentTools implements ToolExecutor {
                     
                     console.log(`[ComponentTools] Setting color value:`, colorValue);
                     
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: propertyPath,
                         dump: { 
@@ -828,7 +829,7 @@ export class ComponentTools implements ToolExecutor {
                         z: Number(processedValue.z) || 0
                     };
                     
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: propertyPath,
                         dump: { 
@@ -843,7 +844,7 @@ export class ComponentTools implements ToolExecutor {
                         y: Number(processedValue.y) || 0
                     };
                     
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: propertyPath,
                         dump: { 
@@ -858,7 +859,7 @@ export class ComponentTools implements ToolExecutor {
                         height: Number(processedValue.height) || 0
                     };
                     
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: propertyPath,
                         dump: { 
@@ -869,7 +870,7 @@ export class ComponentTools implements ToolExecutor {
                 } else if (propertyType === 'node' && processedValue && typeof processedValue === 'object' && 'uuid' in processedValue) {
                     // 特殊处理节点引用
                     console.log(`[ComponentTools] Setting node reference with UUID: ${processedValue.uuid}`);
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: propertyPath,
                         dump: { 
@@ -918,7 +919,7 @@ export class ComponentTools implements ToolExecutor {
                     
                     try {
                         // 获取目标节点的组件信息
-                        const targetNodeData = await Editor.Message.request('scene', 'query-node', targetNodeUuid);
+                        const targetNodeData = await editorMessages.request('scene', 'query-node', targetNodeUuid);
                         if (!targetNodeData || !targetNodeData.__comps__) {
                             throw new Error(`Target node ${targetNodeUuid} not found or has no components`);
                         }
@@ -986,7 +987,7 @@ export class ComponentTools implements ToolExecutor {
                         
                         // 尝试使用与节点/资源引用相同的格式：{uuid: componentId}
                         // 测试看是否能正确设置组件引用
-                        await Editor.Message.request('scene', 'set-property', {
+                        await editorMessages.request('scene', 'set-property', {
                             uuid: nodeUuid,
                             path: propertyPath,
                             dump: { 
@@ -1003,7 +1004,7 @@ export class ComponentTools implements ToolExecutor {
                     // 特殊处理节点数组 - 保持预处理的格式
                     console.log(`[ComponentTools] Setting node array:`, processedValue);
                     
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: propertyPath,
                         dump: { 
@@ -1025,7 +1026,7 @@ export class ComponentTools implements ToolExecutor {
                         }
                     });
                     
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: propertyPath,
                         dump: { 
@@ -1035,7 +1036,7 @@ export class ComponentTools implements ToolExecutor {
                     });
                 } else {
                     // Normal property setting for non-asset properties
-                    await Editor.Message.request('scene', 'set-property', {
+                    await editorMessages.request('scene', 'set-property', {
                         uuid: nodeUuid,
                         path: propertyPath,
                         dump: { value: processedValue }
@@ -1083,7 +1084,7 @@ export class ComponentTools implements ToolExecutor {
             // 解析脚本 UUID：从 asset-db 获取脚本资源信息，用于后续匹配
             let scriptUuid: string | null = null;
             try {
-                const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', scriptPath);
+                const assetInfo = await editorMessages.request('asset-db', 'query-asset-info', scriptPath);
                 if (assetInfo?.uuid) {
                     scriptUuid = assetInfo.uuid;
                 }
@@ -1117,7 +1118,7 @@ export class ComponentTools implements ToolExecutor {
             }
 
             // 使用 create-component API 挂载脚本
-            Editor.Message.request('scene', 'create-component', {
+            editorMessages.request('scene', 'create-component', {
                 uuid: nodeUuid,
                 component: scriptName
             }).then(async () => {
@@ -1162,7 +1163,7 @@ export class ComponentTools implements ToolExecutor {
                     method: 'attachScript',
                     args: [nodeUuid, scriptPath]
                 };
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
+                editorMessages.request('scene', 'execute-scene-script', options).then((result: any) => {
                     resolve(result);
                 }).catch(() => {
                     resolve({
@@ -1754,7 +1755,7 @@ export class ComponentTools implements ToolExecutor {
      */
     private async quickVerifyAsset(nodeUuid: string, componentType: string, property: string): Promise<any> {
         try {
-            const rawNodeData = await Editor.Message.request('scene', 'query-node', nodeUuid);
+            const rawNodeData = await editorMessages.request('scene', 'query-node', nodeUuid);
             if (!rawNodeData || !rawNodeData.__comps__) {
                 return null;
             }

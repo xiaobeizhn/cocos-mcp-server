@@ -1,5 +1,6 @@
 import { ResourceProvider, ResourceDefinition, ResourceReadResult } from '../types';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class SceneResources implements ResourceProvider {
     getResources(): ResourceDefinition[] {
         return [
@@ -36,7 +37,7 @@ export class SceneResources implements ResourceProvider {
 
     private async readCurrentScene(): Promise<ResourceReadResult> {
         try {
-            const tree: any = await Editor.Message.request('scene', 'query-node-tree');
+            const tree: any = await editorMessages.request('scene', 'query-node-tree');
             if (tree && tree.uuid) {
                 const content = {
                     name: tree.name || 'Untitled',
@@ -50,7 +51,7 @@ export class SceneResources implements ResourceProvider {
         } catch { /* fallback */ }
 
         try {
-            const result: any = await Editor.Message.request('scene', 'execute-scene-script', {
+            const result: any = await editorMessages.request('scene', 'execute-scene-script', {
                 name: 'cocos-mcp-server',
                 method: 'getCurrentSceneInfo',
                 args: []
@@ -63,7 +64,7 @@ export class SceneResources implements ResourceProvider {
 
     private async readSceneList(): Promise<ResourceReadResult> {
         try {
-            const results: any[] = await Editor.Message.request('asset-db', 'query-assets', {
+            const results: any[] = await editorMessages.request('asset-db', 'query-assets', {
                 pattern: 'db://assets/**/*.scene'
             });
             const scenes = results.map(asset => ({
@@ -79,7 +80,7 @@ export class SceneResources implements ResourceProvider {
 
     private async readHierarchy(): Promise<ResourceReadResult> {
         try {
-            const tree: any = await Editor.Message.request('scene', 'query-node-tree');
+            const tree: any = await editorMessages.request('scene', 'query-node-tree');
             if (tree) {
                 const hierarchy = this.buildHierarchy(tree, 10);
                 return { content: JSON.stringify(hierarchy) };
@@ -87,7 +88,7 @@ export class SceneResources implements ResourceProvider {
         } catch { /* fallback */ }
 
         try {
-            const result: any = await Editor.Message.request('scene', 'execute-scene-script', {
+            const result: any = await editorMessages.request('scene', 'execute-scene-script', {
                 name: 'cocos-mcp-server',
                 method: 'getSceneHierarchy',
                 args: [false]

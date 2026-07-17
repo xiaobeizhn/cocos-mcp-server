@@ -2,6 +2,7 @@ import { ToolDefinition, ToolResponse, ToolExecutor, ProjectInfo, AssetInfo } fr
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class ProjectTools implements ToolExecutor {
     getTools(): ToolDefinition[] {
         return [
@@ -406,7 +407,7 @@ export class ProjectTools implements ToolExecutor {
 
             // Note: Preview module is not documented in official API
             // Using fallback approach - open build panel as alternative
-            Editor.Message.request('builder', 'open').then(() => {
+            editorMessages.request('builder', 'open').then(() => {
                 resolve({
                     success: true,
                     message: `Build panel opened. Preview functionality requires manual setup.`
@@ -428,7 +429,7 @@ export class ProjectTools implements ToolExecutor {
 
             // Note: Builder module only supports 'open' and 'query-worker-ready'
             // Building requires manual interaction through the build panel
-            Editor.Message.request('builder', 'open').then(() => {
+            editorMessages.request('builder', 'open').then(() => {
                 resolve({
                     success: true,
                     message: `Build panel opened for ${args.platform}. Please configure and start build manually.`,
@@ -448,7 +449,7 @@ export class ProjectTools implements ToolExecutor {
             // 使用正确的 asset-db API 刷新资源
             const targetPath = folder || 'db://assets';
             
-            Editor.Message.request('asset-db', 'refresh-asset', targetPath).then(() => {
+            editorMessages.request('asset-db', 'refresh-asset', targetPath).then(() => {
                 resolve({
                     success: true,
                     message: `Assets refreshed in: ${targetPath}`
@@ -470,7 +471,7 @@ export class ProjectTools implements ToolExecutor {
             const targetPath = targetFolder.startsWith('db://') ?
                 targetFolder : `db://assets/${targetFolder}`;
 
-            Editor.Message.request('asset-db', 'import-asset', sourcePath, `${targetPath}/${fileName}`).then((result: any) => {
+            editorMessages.request('asset-db', 'import-asset', sourcePath, `${targetPath}/${fileName}`).then((result: any) => {
                 resolve({
                     success: true,
                     data: {
@@ -487,7 +488,7 @@ export class ProjectTools implements ToolExecutor {
 
     private async getAssetInfo(assetPath: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'query-asset-info', assetPath).then((assetInfo: any) => {
+            editorMessages.request('asset-db', 'query-asset-info', assetPath).then((assetInfo: any) => {
                 if (!assetInfo) {
                     throw new Error('Asset not found');
                 }
@@ -539,7 +540,7 @@ export class ProjectTools implements ToolExecutor {
             }
 
             // Note: query-assets API parameters corrected based on documentation
-            Editor.Message.request('asset-db', 'query-assets', { pattern: pattern }).then((results: any[]) => {
+            editorMessages.request('asset-db', 'query-assets', { pattern: pattern }).then((results: any[]) => {
                 const assets = results.map(asset => ({
                     name: asset.name,
                     uuid: asset.uuid,
@@ -567,7 +568,7 @@ export class ProjectTools implements ToolExecutor {
     private async getBuildSettings(): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // 检查构建器是否准备就绪
-            Editor.Message.request('builder', 'query-worker-ready').then((ready: boolean) => {
+            editorMessages.request('builder', 'query-worker-ready').then((ready: boolean) => {
                 resolve({
                     success: true,
                     data: {
@@ -590,7 +591,7 @@ export class ProjectTools implements ToolExecutor {
 
     private async openBuildPanel(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('builder', 'open').then(() => {
+            editorMessages.request('builder', 'open').then(() => {
                 resolve({
                     success: true,
                     message: 'Build panel opened successfully'
@@ -603,7 +604,7 @@ export class ProjectTools implements ToolExecutor {
 
     private async checkBuilderStatus(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('builder', 'query-worker-ready').then((ready: boolean) => {
+            editorMessages.request('builder', 'query-worker-ready').then((ready: boolean) => {
                 resolve({
                     success: true,
                     data: {
@@ -645,7 +646,7 @@ export class ProjectTools implements ToolExecutor {
                 rename: !overwrite
             };
 
-            Editor.Message.request('asset-db', 'create-asset', url, content, options).then((result: any) => {
+            editorMessages.request('asset-db', 'create-asset', url, content, options).then((result: any) => {
                 if (result && result.uuid) {
                     resolve({
                         success: true,
@@ -677,7 +678,7 @@ export class ProjectTools implements ToolExecutor {
                 rename: !overwrite
             };
 
-            Editor.Message.request('asset-db', 'copy-asset', source, target, options).then((result: any) => {
+            editorMessages.request('asset-db', 'copy-asset', source, target, options).then((result: any) => {
                 if (result && result.uuid) {
                     resolve({
                         success: true,
@@ -710,7 +711,7 @@ export class ProjectTools implements ToolExecutor {
                 rename: !overwrite
             };
 
-            Editor.Message.request('asset-db', 'move-asset', source, target, options).then((result: any) => {
+            editorMessages.request('asset-db', 'move-asset', source, target, options).then((result: any) => {
                 if (result && result.uuid) {
                     resolve({
                         success: true,
@@ -738,7 +739,7 @@ export class ProjectTools implements ToolExecutor {
 
     private async deleteAsset(url: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'delete-asset', url).then((result: any) => {
+            editorMessages.request('asset-db', 'delete-asset', url).then((result: any) => {
                 resolve({
                     success: true,
                     data: {
@@ -754,7 +755,7 @@ export class ProjectTools implements ToolExecutor {
 
     private async saveAsset(url: string, content: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'save-asset', url, content).then((result: any) => {
+            editorMessages.request('asset-db', 'save-asset', url, content).then((result: any) => {
                 if (result && result.uuid) {
                     resolve({
                         success: true,
@@ -781,7 +782,7 @@ export class ProjectTools implements ToolExecutor {
 
     private async reimportAsset(url: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'reimport-asset', url).then(() => {
+            editorMessages.request('asset-db', 'reimport-asset', url).then(() => {
                 resolve({
                     success: true,
                     data: {
@@ -797,7 +798,7 @@ export class ProjectTools implements ToolExecutor {
 
     private async queryAssetPath(url: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'query-path', url).then((path: string | null) => {
+            editorMessages.request('asset-db', 'query-path', url).then((path: string | null) => {
                 if (path) {
                     resolve({
                         success: true,
@@ -818,7 +819,7 @@ export class ProjectTools implements ToolExecutor {
 
     private async queryAssetUuid(url: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'query-uuid', url).then((uuid: string | null) => {
+            editorMessages.request('asset-db', 'query-uuid', url).then((uuid: string | null) => {
                 if (uuid) {
                     resolve({
                         success: true,
@@ -839,7 +840,7 @@ export class ProjectTools implements ToolExecutor {
 
     private async queryAssetUrl(uuid: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'query-url', uuid).then((url: string | null) => {
+            editorMessages.request('asset-db', 'query-url', uuid).then((url: string | null) => {
                 if (url) {
                     resolve({
                         success: true,
@@ -962,7 +963,7 @@ export class ProjectTools implements ToolExecutor {
                         for (const subAsset of possibleSubAssets) {
                             try {
                                 // Try to get URL for the sub-asset to verify it exists
-                                const subAssetUrl = await Editor.Message.request('asset-db', 'query-url', subAsset.uuid);
+                                const subAssetUrl = await editorMessages.request('asset-db', 'query-url', subAsset.uuid);
                                 if (subAssetUrl) {
                                     detailedInfo.subAssets.push({
                                         type: subAsset.type,

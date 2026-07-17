@@ -1,5 +1,6 @@
 import { ResourceProvider, ResourceDefinition, ResourceReadResult } from '../types';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class DebugResources implements ResourceProvider {
     getResources(): ResourceDefinition[] {
         return [
@@ -28,7 +29,7 @@ export class DebugResources implements ResourceProvider {
 
     private async readPerformance(): Promise<ResourceReadResult> {
         try {
-            const stats: any = await Editor.Message.request('scene', 'query-performance');
+            const stats: any = await editorMessages.request('scene', 'query-performance');
             const content = {
                 nodeCount: stats.nodeCount || 0,
                 componentCount: stats.componentCount || 0,
@@ -49,7 +50,7 @@ export class DebugResources implements ResourceProvider {
         const filter = params._filter || 'all';
 
         try {
-            const logs: any = await Editor.Message.request('console', 'query-log', { limit, level: filter });
+            const logs: any = await editorMessages.request('console', 'query-log', { limit, level: filter });
             return { content: JSON.stringify(logs) };
         } catch {
             // Fallback: return basic info if console query is not available

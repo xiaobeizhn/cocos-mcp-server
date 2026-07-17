@@ -2,6 +2,7 @@ import { ToolDefinition, ToolResponse, ToolExecutor, ConsoleMessage, Performance
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class DebugTools implements ToolExecutor {
     private consoleMessages: ConsoleMessage[] = [];
     private readonly maxMessages = 1000;
@@ -180,8 +181,8 @@ export class DebugTools implements ToolExecutor {
         this.consoleMessages = [];
         
         try {
-            // Note: Editor.Message.send may not return a promise in all versions
-            Editor.Message.send('console', 'clear');
+            // Note: editorMessages.send may not return a promise in all versions
+            editorMessages.send('console', 'clear');
             return {
                 success: true,
                 message: 'Console cleared successfully'
@@ -193,7 +194,7 @@ export class DebugTools implements ToolExecutor {
 
     private async executeScript(script: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'execute-scene-script', {
+            editorMessages.request('scene', 'execute-scene-script', {
                 name: 'cocos-mcp-server',
                 method: 'eval',
                 args: [script]
@@ -219,7 +220,7 @@ export class DebugTools implements ToolExecutor {
                 }
 
                 try {
-                    const nodeData = await Editor.Message.request('scene', 'query-node', nodeUuid);
+                    const nodeData = await editorMessages.request('scene', 'query-node', nodeUuid);
                     
                     const tree = {
                         uuid: nodeData.uuid,
@@ -248,7 +249,7 @@ export class DebugTools implements ToolExecutor {
                     resolve({ success: true, data: tree });
                 });
             } else {
-                Editor.Message.request('scene', 'query-hierarchy').then(async (hierarchy: any) => {
+                editorMessages.request('scene', 'query-hierarchy').then(async (hierarchy: any) => {
                     const trees = [];
                     for (const rootNode of hierarchy.children) {
                         const tree = await buildTree(rootNode.uuid);
@@ -268,7 +269,7 @@ export class DebugTools implements ToolExecutor {
         try {
             // Check for missing assets
             if (options.checkMissingAssets) {
-                const assetCheck = await Editor.Message.request('scene', 'check-missing-assets');
+                const assetCheck = await editorMessages.request('scene', 'check-missing-assets');
                 if (assetCheck && assetCheck.missing) {
                     issues.push({
                         type: 'error',
@@ -281,7 +282,7 @@ export class DebugTools implements ToolExecutor {
 
             // Check for performance issues
             if (options.checkPerformance) {
-                const hierarchy = await Editor.Message.request('scene', 'query-hierarchy');
+                const hierarchy = await editorMessages.request('scene', 'query-hierarchy');
                 const nodeCount = this.countNodes(hierarchy.children);
                 
                 if (nodeCount > 1000) {

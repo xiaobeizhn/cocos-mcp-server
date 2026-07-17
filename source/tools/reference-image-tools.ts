@@ -1,5 +1,6 @@
 import { ToolDefinition, ToolResponse, ToolExecutor } from '../types';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class ReferenceImageTools implements ToolExecutor {
     getTools(): ToolDefinition[] {
         return [
@@ -200,7 +201,7 @@ export class ReferenceImageTools implements ToolExecutor {
 
     private async addReferenceImage(paths: string[]): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('reference-image', 'add-image', paths).then(() => {
+            editorMessages.request('reference-image', 'add-image', paths).then(() => {
                 resolve({
                     success: true,
                     data: {
@@ -217,7 +218,7 @@ export class ReferenceImageTools implements ToolExecutor {
 
     private async removeReferenceImage(paths?: string[]): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('reference-image', 'remove-image', paths).then(() => {
+            editorMessages.request('reference-image', 'remove-image', paths).then(() => {
                 const message = paths && paths.length > 0 ? 
                     `Removed ${paths.length} reference image(s)` : 
                     'Removed current reference image';
@@ -234,7 +235,7 @@ export class ReferenceImageTools implements ToolExecutor {
     private async switchReferenceImage(path: string, sceneUUID?: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
             const args = sceneUUID ? [path, sceneUUID] : [path];
-            Editor.Message.request('reference-image', 'switch-image', ...args).then(() => {
+            editorMessages.request('reference-image', 'switch-image', ...args).then(() => {
                 resolve({
                     success: true,
                     data: {
@@ -251,7 +252,7 @@ export class ReferenceImageTools implements ToolExecutor {
 
     private async setReferenceImageData(key: string, value: any): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('reference-image', 'set-image-data', key, value).then(() => {
+            editorMessages.request('reference-image', 'set-image-data', key, value).then(() => {
                 resolve({
                     success: true,
                     data: {
@@ -268,7 +269,7 @@ export class ReferenceImageTools implements ToolExecutor {
 
     private async queryReferenceImageConfig(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('reference-image', 'query-config').then((config: any) => {
+            editorMessages.request('reference-image', 'query-config').then((config: any) => {
                 resolve({
                     success: true,
                     data: config
@@ -281,7 +282,7 @@ export class ReferenceImageTools implements ToolExecutor {
 
     private async queryCurrentReferenceImage(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('reference-image', 'query-current').then((current: any) => {
+            editorMessages.request('reference-image', 'query-current').then((current: any) => {
                 resolve({
                     success: true,
                     data: current
@@ -294,7 +295,7 @@ export class ReferenceImageTools implements ToolExecutor {
 
     private async refreshReferenceImage(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('reference-image', 'refresh').then(() => {
+            editorMessages.request('reference-image', 'refresh').then(() => {
                 resolve({
                     success: true,
                     message: 'Reference image refreshed'
@@ -308,8 +309,8 @@ export class ReferenceImageTools implements ToolExecutor {
     private async setReferenceImagePosition(x: number, y: number): Promise<ToolResponse> {
         return new Promise(async (resolve) => {
             try {
-                await Editor.Message.request('reference-image', 'set-image-data', 'x', x);
-                await Editor.Message.request('reference-image', 'set-image-data', 'y', y);
+                await editorMessages.request('reference-image', 'set-image-data', 'x', x);
+                await editorMessages.request('reference-image', 'set-image-data', 'y', y);
                 
                 resolve({
                     success: true,
@@ -328,8 +329,8 @@ export class ReferenceImageTools implements ToolExecutor {
     private async setReferenceImageScale(sx: number, sy: number): Promise<ToolResponse> {
         return new Promise(async (resolve) => {
             try {
-                await Editor.Message.request('reference-image', 'set-image-data', 'sx', sx);
-                await Editor.Message.request('reference-image', 'set-image-data', 'sy', sy);
+                await editorMessages.request('reference-image', 'set-image-data', 'sx', sx);
+                await editorMessages.request('reference-image', 'set-image-data', 'sy', sy);
                 
                 resolve({
                     success: true,
@@ -347,7 +348,7 @@ export class ReferenceImageTools implements ToolExecutor {
 
     private async setReferenceImageOpacity(opacity: number): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('reference-image', 'set-image-data', 'opacity', opacity).then(() => {
+            editorMessages.request('reference-image', 'set-image-data', 'opacity', opacity).then(() => {
                 resolve({
                     success: true,
                     data: {
@@ -364,8 +365,8 @@ export class ReferenceImageTools implements ToolExecutor {
     private async listReferenceImages(): Promise<ToolResponse> {
         return new Promise(async (resolve) => {
             try {
-                const config = await Editor.Message.request('reference-image', 'query-config');
-                const current = await Editor.Message.request('reference-image', 'query-current');
+                const config = await editorMessages.request('reference-image', 'query-config');
+                const current = await editorMessages.request('reference-image', 'query-current');
                 
                 resolve({
                     success: true,
@@ -385,7 +386,7 @@ export class ReferenceImageTools implements ToolExecutor {
         return new Promise(async (resolve) => {
             try {
                 // Remove all reference images by calling remove-image without paths
-                await Editor.Message.request('reference-image', 'remove-image');
+                await editorMessages.request('reference-image', 'remove-image');
                 
                 resolve({
                     success: true,

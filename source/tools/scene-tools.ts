@@ -1,5 +1,6 @@
 import { ToolDefinition, ToolResponse, ToolExecutor, SceneInfo } from '../types';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class SceneTools implements ToolExecutor {
     getTools(): ToolDefinition[] {
         return [
@@ -88,7 +89,7 @@ export class SceneTools implements ToolExecutor {
     private async getSceneList(): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // Note: query-assets API corrected with proper parameters
-            Editor.Message.request('asset-db', 'query-assets', {
+            editorMessages.request('asset-db', 'query-assets', {
                 pattern: 'db://assets/**/*.scene'
             }).then((results: any[]) => {
                 const scenes: SceneInfo[] = results.map(asset => ({
@@ -106,13 +107,13 @@ export class SceneTools implements ToolExecutor {
     private async openScene(scenePath: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // 首先获取场景的UUID
-            Editor.Message.request('asset-db', 'query-uuid', scenePath).then((uuid: string | null) => {
+            editorMessages.request('asset-db', 'query-uuid', scenePath).then((uuid: string | null) => {
                 if (!uuid) {
                     throw new Error('Scene not found');
                 }
                 
                 // 使用正确的 scene API 打开场景 (需要UUID)
-                return Editor.Message.request('scene', 'open-scene', uuid);
+                return editorMessages.request('scene', 'open-scene', uuid);
             }).then(() => {
                 resolve({ success: true, message: `Scene opened: ${scenePath}` });
             }).catch((err: Error) => {
@@ -123,7 +124,7 @@ export class SceneTools implements ToolExecutor {
 
     private async saveScene(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'save-scene').then(() => {
+            editorMessages.request('scene', 'save-scene').then(() => {
                 resolve({ success: true, message: 'Scene saved successfully' });
             }).catch((err: Error) => {
                 resolve({ success: false, error: err.message });
@@ -292,7 +293,7 @@ export class SceneTools implements ToolExecutor {
                 }
             ], null, 2);
             
-            Editor.Message.request('asset-db', 'create-asset', fullPath, sceneContent).then((result: any) => {
+            editorMessages.request('asset-db', 'create-asset', fullPath, sceneContent).then((result: any) => {
                 // Verify scene creation by checking if it exists
                 this.getSceneList().then((sceneList) => {
                     const createdScene = sceneList.data?.find((scene: any) => scene.uuid === result.uuid);
@@ -327,7 +328,7 @@ export class SceneTools implements ToolExecutor {
     private async saveSceneAs(path: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // save-as-scene API 不接受路径参数，会弹出对话框让用户选择
-            (Editor.Message.request as any)('scene', 'save-as-scene').then(() => {
+            (editorMessages.request as any)('scene', 'save-as-scene').then(() => {
                 resolve({
                     success: true,
                     data: {
@@ -343,7 +344,7 @@ export class SceneTools implements ToolExecutor {
 
     private async closeScene(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'close-scene').then(() => {
+            editorMessages.request('scene', 'close-scene').then(() => {
                 resolve({
                     success: true,
                     message: 'Scene closed successfully'

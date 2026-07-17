@@ -1,5 +1,6 @@
 import { ToolDefinition, ToolResponse, ToolExecutor } from '../types';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class SceneAdvancedTools implements ToolExecutor {
     getTools(): ToolDefinition[] {
         return [
@@ -410,7 +411,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async resetNodeProperty(uuid: string, path: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'reset-property', { 
+            editorMessages.request('scene', 'reset-property', { 
                 uuid, 
                 path, 
                 dump: { value: null } 
@@ -427,7 +428,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async moveArrayElement(uuid: string, path: string, target: number, offset: number): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'move-array-element', {
+            editorMessages.request('scene', 'move-array-element', {
                 uuid,
                 path,
                 target,
@@ -445,7 +446,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async removeArrayElement(uuid: string, path: string, index: number): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'remove-array-element', {
+            editorMessages.request('scene', 'remove-array-element', {
                 uuid,
                 path,
                 index
@@ -462,7 +463,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async copyNode(uuids: string | string[]): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'copy-node', uuids).then((result: string | string[]) => {
+            editorMessages.request('scene', 'copy-node', uuids).then((result: string | string[]) => {
                 resolve({
                     success: true,
                     data: {
@@ -478,7 +479,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async pasteNode(target: string, uuids: string | string[], keepWorldTransform: boolean = false): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'paste-node', {
+            editorMessages.request('scene', 'paste-node', {
                 target,
                 uuids,
                 keepWorldTransform
@@ -498,7 +499,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async cutNode(uuids: string | string[]): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'cut-node', uuids).then((result: any) => {
+            editorMessages.request('scene', 'cut-node', uuids).then((result: any) => {
                 resolve({
                     success: true,
                     data: {
@@ -514,7 +515,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async resetNodeTransform(uuid: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'reset-node', { uuid }).then(() => {
+            editorMessages.request('scene', 'reset-node', { uuid }).then(() => {
                 resolve({
                     success: true,
                     message: 'Node transform reset to default'
@@ -527,7 +528,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async resetComponent(uuid: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'reset-component', { uuid }).then(() => {
+            editorMessages.request('scene', 'reset-component', { uuid }).then(() => {
                 resolve({
                     success: true,
                     message: 'Component reset to default values'
@@ -540,7 +541,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async restorePrefab(nodeUuid: string, assetUuid: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            (Editor.Message.request as any)('scene', 'restore-prefab', nodeUuid, assetUuid).then(() => {
+            (editorMessages.request as any)('scene', 'restore-prefab', nodeUuid, assetUuid).then(() => {
                 resolve({
                     success: true,
                     message: 'Prefab restored successfully'
@@ -553,7 +554,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async executeComponentMethod(uuid: string, name: string, args: any[] = []): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'execute-component-method', {
+            editorMessages.request('scene', 'execute-component-method', {
                 uuid,
                 name,
                 args
@@ -573,7 +574,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async executeSceneScript(name: string, method: string, args: any[] = []): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'execute-scene-script', {
+            editorMessages.request('scene', 'execute-scene-script', {
                 name,
                 method,
                 args
@@ -590,7 +591,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async sceneSnapshot(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'snapshot').then(() => {
+            editorMessages.request('scene', 'snapshot').then(() => {
                 resolve({
                     success: true,
                     message: 'Scene snapshot created'
@@ -603,7 +604,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async sceneSnapshotAbort(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'snapshot-abort').then(() => {
+            editorMessages.request('scene', 'snapshot-abort').then(() => {
                 resolve({
                     success: true,
                     message: 'Scene snapshot aborted'
@@ -616,7 +617,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async beginUndoRecording(nodeUuid: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'begin-recording', nodeUuid).then((undoId: string) => {
+            editorMessages.request('scene', 'begin-recording', nodeUuid).then((undoId: string) => {
                 resolve({
                     success: true,
                     data: {
@@ -632,7 +633,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async endUndoRecording(undoId: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'end-recording', undoId).then(() => {
+            editorMessages.request('scene', 'end-recording', undoId).then(() => {
                 resolve({
                     success: true,
                     message: 'Undo recording ended'
@@ -645,7 +646,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async cancelUndoRecording(undoId: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'cancel-recording', undoId).then(() => {
+            editorMessages.request('scene', 'cancel-recording', undoId).then(() => {
                 resolve({
                     success: true,
                     message: 'Undo recording cancelled'
@@ -658,7 +659,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async softReloadScene(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'soft-reload').then(() => {
+            editorMessages.request('scene', 'soft-reload').then(() => {
                 resolve({
                     success: true,
                     message: 'Scene soft reloaded successfully'
@@ -671,7 +672,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async querySceneReady(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'query-is-ready').then((ready: boolean) => {
+            editorMessages.request('scene', 'query-is-ready').then((ready: boolean) => {
                 resolve({
                     success: true,
                     data: {
@@ -687,7 +688,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async querySceneDirty(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'query-dirty').then((dirty: boolean) => {
+            editorMessages.request('scene', 'query-dirty').then((dirty: boolean) => {
                 resolve({
                     success: true,
                     data: {
@@ -708,7 +709,7 @@ export class SceneAdvancedTools implements ToolExecutor {
                 options.extends = extendsClass;
             }
 
-            Editor.Message.request('scene', 'query-classes', options).then((classes: any[]) => {
+            editorMessages.request('scene', 'query-classes', options).then((classes: any[]) => {
                 resolve({
                     success: true,
                     data: {
@@ -725,7 +726,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async querySceneComponents(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'query-components').then((components: any[]) => {
+            editorMessages.request('scene', 'query-components').then((components: any[]) => {
                 resolve({
                     success: true,
                     data: {
@@ -741,7 +742,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async queryComponentHasScript(className: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'query-component-has-script', className).then((hasScript: boolean) => {
+            editorMessages.request('scene', 'query-component-has-script', className).then((hasScript: boolean) => {
                 resolve({
                     success: true,
                     data: {
@@ -758,7 +759,7 @@ export class SceneAdvancedTools implements ToolExecutor {
 
     private async queryNodesByAssetUuid(assetUuid: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'query-nodes-by-asset-uuid', assetUuid).then((nodeUuids: string[]) => {
+            editorMessages.request('scene', 'query-nodes-by-asset-uuid', assetUuid).then((nodeUuids: string[]) => {
                 resolve({
                     success: true,
                     data: {

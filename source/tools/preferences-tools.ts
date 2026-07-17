@@ -1,5 +1,6 @@
 import { ToolDefinition, ToolResponse, ToolExecutor } from '../types';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class PreferencesTools implements ToolExecutor {
     getTools(): ToolDefinition[] {
         return [
@@ -161,7 +162,7 @@ export class PreferencesTools implements ToolExecutor {
                 requestArgs.push(...args);
             }
 
-            (Editor.Message.request as any)('preferences', 'open-settings', ...requestArgs).then(() => {
+            (editorMessages.request as any)('preferences', 'open-settings', ...requestArgs).then(() => {
                 resolve({
                     success: true,
                     message: `Preferences settings opened${tab ? ` on tab: ${tab}` : ''}`
@@ -180,7 +181,7 @@ export class PreferencesTools implements ToolExecutor {
             }
             requestArgs.push(type);
 
-            (Editor.Message.request as any)('preferences', 'query-config', ...requestArgs).then((config: any) => {
+            (editorMessages.request as any)('preferences', 'query-config', ...requestArgs).then((config: any) => {
                 resolve({
                     success: true,
                     data: {
@@ -198,7 +199,7 @@ export class PreferencesTools implements ToolExecutor {
 
     private async setPreferencesConfig(name: string, path: string, value: any, type: string = 'global'): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            (Editor.Message.request as any)('preferences', 'set-config', name, path, value, type).then((success: boolean) => {
+            (editorMessages.request as any)('preferences', 'set-config', name, path, value, type).then((success: boolean) => {
                 if (success) {
                     resolve({
                         success: true,
@@ -234,7 +235,7 @@ export class PreferencesTools implements ToolExecutor {
             const preferences: any = {};
 
             const queryPromises = categories.map(category => {
-                return Editor.Message.request('preferences', 'query-config', category, undefined, 'global')
+                return editorMessages.request('preferences', 'query-config', category, undefined, 'global')
                     .then((config: any) => {
                         preferences[category] = config;
                     })
@@ -267,8 +268,8 @@ export class PreferencesTools implements ToolExecutor {
         return new Promise((resolve) => {
             if (name) {
                 // Reset specific preference category
-                Editor.Message.request('preferences', 'query-config', name, undefined, 'default').then((defaultConfig: any) => {
-                    return (Editor.Message.request as any)('preferences', 'set-config', name, '', defaultConfig, type);
+                editorMessages.request('preferences', 'query-config', name, undefined, 'default').then((defaultConfig: any) => {
+                    return (editorMessages.request as any)('preferences', 'set-config', name, '', defaultConfig, type);
                 }).then((success: boolean) => {
                     if (success) {
                         resolve({

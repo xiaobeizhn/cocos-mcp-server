@@ -1,6 +1,7 @@
 import { ResourceProvider, ResourceDefinition, ResourceReadResult } from '../types';
 import { PrefabTools } from '../tools/prefab-tools';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class PrefabResources implements ResourceProvider {
     getResources(): ResourceDefinition[] {
         return [
@@ -37,7 +38,7 @@ export class PrefabResources implements ResourceProvider {
 
     private async readPrefabList(): Promise<ResourceReadResult> {
         try {
-            const results: any[] = await Editor.Message.request('asset-db', 'query-assets', {
+            const results: any[] = await editorMessages.request('asset-db', 'query-assets', {
                 pattern: 'db://assets/**/*.prefab'
             });
             const prefabs = results.map(asset => ({
@@ -53,7 +54,7 @@ export class PrefabResources implements ResourceProvider {
 
     private async readPrefabInfo(assetPath: string): Promise<ResourceReadResult> {
         try {
-            const info: any = await Editor.Message.request('asset-db', 'query-asset-info', assetPath);
+            const info: any = await editorMessages.request('asset-db', 'query-asset-info', assetPath);
             if (!info) {
                 throw new Error(`Prefab not found: ${assetPath}`);
             }

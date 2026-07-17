@@ -1,6 +1,7 @@
 import { ResourceProvider, ResourceDefinition, ResourceReadResult } from '../types';
 import { PrefabTools } from '../tools/prefab-tools';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class EditorResources implements ResourceProvider {
     getResources(): ResourceDefinition[] {
         return [
@@ -48,7 +49,7 @@ export class EditorResources implements ResourceProvider {
 
         let sceneInfo: any = null;
         try {
-            const tree: any = await Editor.Message.request('scene', 'query-node-tree');
+            const tree: any = await editorMessages.request('scene', 'query-node-tree');
             if (tree && tree.uuid) {
                 sceneInfo = {
                     name: tree.name || 'Untitled',
@@ -78,8 +79,8 @@ export class EditorResources implements ResourceProvider {
     private async readEditorInfo(): Promise<ResourceReadResult> {
         const content = {
             editor: {
-                version: (Editor as any).versions?.editor || 'Unknown',
-                cocosVersion: (Editor as any).versions?.cocos || 'Unknown'
+                version: (Editor as any).App?.version || 'Unknown',
+                cocosVersion: (Editor as any).App?.version || 'Unknown'
             },
             platform: process.platform,
             arch: process.arch,
@@ -96,10 +97,10 @@ export class EditorResources implements ResourceProvider {
 
     private async readSelection(): Promise<ResourceReadResult> {
         try {
-            const selected: any = await Editor.Message.request('scene', 'query-selection');
+            const selected: any = await editorMessages.invokeCapability('selection.queryNodes');
             const content = {
                 selected: Array.isArray(selected)
-                    ? selected.map((s: any) => ({ uuid: s.uuid, name: s.name }))
+                    ? selected.map((s: any) => typeof s === 'string' ? { uuid: s } : { uuid: s.uuid, name: s.name })
                     : []
             };
             return { content: JSON.stringify(content) };
@@ -111,13 +112,13 @@ export class EditorResources implements ResourceProvider {
     private async readGizmoState(): Promise<ResourceReadResult> {
         let tool = 'unknown', pivot = 'unknown', coordinate = 'unknown';
         try {
-            tool = await Editor.Message.request('scene', 'query-gizmo-tool-name');
+            tool = await editorMessages.request('scene', 'query-gizmo-tool-name');
         } catch { /* ignore */ }
         try {
-            pivot = await Editor.Message.request('scene', 'query-gizmo-pivot');
+            pivot = await editorMessages.request('scene', 'query-gizmo-pivot');
         } catch { /* ignore */ }
         try {
-            coordinate = await Editor.Message.request('scene', 'query-gizmo-coordinate');
+            coordinate = await editorMessages.request('scene', 'query-gizmo-coordinate');
         } catch { /* ignore */ }
 
         return { content: JSON.stringify({ tool, pivot, coordinate }) };

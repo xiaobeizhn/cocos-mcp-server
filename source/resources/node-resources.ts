@@ -1,5 +1,6 @@
 import { ResourceProvider, ResourceDefinition, ResourceReadResult } from '../types';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class NodeResources implements ResourceProvider {
     getResources(): ResourceDefinition[] {
         return [
@@ -51,7 +52,7 @@ export class NodeResources implements ResourceProvider {
     }
 
     private async readAllNodes(params: Record<string, string>): Promise<ResourceReadResult> {
-        const tree: any = await Editor.Message.request('scene', 'query-node-tree');
+        const tree: any = await editorMessages.request('scene', 'query-node-tree');
         if (!tree) {
             return { content: JSON.stringify({ items: [], totalCount: 0 }) };
         }
@@ -75,7 +76,7 @@ export class NodeResources implements ResourceProvider {
     }
 
     private async readNodeInfo(uuid: string): Promise<ResourceReadResult> {
-        const nodeData: any = await Editor.Message.request('scene', 'query-node', uuid);
+        const nodeData: any = await editorMessages.request('scene', 'query-node', uuid);
         if (!nodeData) {
             throw new Error(`Node not found: ${uuid}`);
         }
@@ -98,7 +99,7 @@ export class NodeResources implements ResourceProvider {
     }
 
     private async readNodeComponents(uuid: string, params: Record<string, string>): Promise<ResourceReadResult> {
-        const nodeData: any = await Editor.Message.request('scene', 'query-node', uuid);
+        const nodeData: any = await editorMessages.request('scene', 'query-node', uuid);
         if (!nodeData) {
             throw new Error(`Node not found: ${uuid}`);
         }
@@ -125,7 +126,7 @@ export class NodeResources implements ResourceProvider {
     }
 
     private async readNodeComponent(uuid: string, type: string): Promise<ResourceReadResult> {
-        const nodeData: any = await Editor.Message.request('scene', 'query-node', uuid);
+        const nodeData: any = await editorMessages.request('scene', 'query-node', uuid);
         if (!nodeData) {
             throw new Error(`Node not found: ${uuid}`);
         }
@@ -150,7 +151,7 @@ export class NodeResources implements ResourceProvider {
     }
 
     private async readNodeChildren(uuid: string): Promise<ResourceReadResult> {
-        const nodeData: any = await Editor.Message.request('scene', 'query-node', uuid);
+        const nodeData: any = await editorMessages.request('scene', 'query-node', uuid);
         if (!nodeData) {
             throw new Error(`Node not found: ${uuid}`);
         }
@@ -159,7 +160,7 @@ export class NodeResources implements ResourceProvider {
         const children: any[] = [];
         for (const childUuid of childUuids) {
             try {
-                const child: any = await Editor.Message.request('scene', 'query-node', childUuid);
+                const child: any = await editorMessages.request('scene', 'query-node', childUuid);
                 if (child) {
                     children.push({
                         uuid: this.val(child.uuid) || childUuid,

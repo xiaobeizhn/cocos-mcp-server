@@ -2,12 +2,13 @@
     "$schema": "./@types/schema/package/index.json",
     "package_version": 2,
     "name": "cocos-mcp-server",
-    "version": "1.4.2",
+    "version": "1.5.0",
     "author": "LiDaxian",
     "editor": ">=3.8.6",
     "scripts": {
         "preinstall": "node ./scripts/preinstall.js",
         "build": "tsc",
+        "test:wave0": "npm run build && node --test dist/test/editor-message-client.test.js dist/test/error-normalizer.test.js dist/test/mcp-server-errors.test.js",
         "watch": "tsc -w"
     },
     "description": "i18n:cocos-mcp-server.description",

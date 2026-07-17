@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import { ToolDefinition, ToolResponse, ToolExecutor, PrefabInfo, PrefabEditState, EditContext } from '../types';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class PrefabTools implements ToolExecutor {
     private static editState: PrefabEditState | null = null;
 
@@ -238,7 +239,7 @@ export class PrefabTools implements ToolExecutor {
 
     private async loadPrefab(prefabPath: string): Promise<ToolResponse> {
         try {
-            const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', prefabPath);
+            const assetInfo = await editorMessages.request('asset-db', 'query-asset-info', prefabPath);
             if (!assetInfo) {
                 return { success: false, error: 'Prefab not found' };
             }
@@ -268,7 +269,7 @@ export class PrefabTools implements ToolExecutor {
         return new Promise(async (resolve) => {
             try {
                 // 获取预制体资源信息
-                const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', args.prefabPath);
+                const assetInfo = await editorMessages.request('asset-db', 'query-asset-info', args.prefabPath);
                 if (!assetInfo) {
                     throw new Error('预制体未找到');
                 }
@@ -300,7 +301,7 @@ export class PrefabTools implements ToolExecutor {
                 }
 
                 // 创建节点
-                const nodeUuid = await Editor.Message.request('scene', 'create-node', createNodeOptions);
+                const nodeUuid = await editorMessages.request('scene', 'create-node', createNodeOptions);
                 const uuid = Array.isArray(nodeUuid) ? nodeUuid[0] : nodeUuid;
 
                 // 注意：create-node API从预制体资源创建时应该自动建立预制体关联
@@ -375,9 +376,9 @@ export class PrefabTools implements ToolExecutor {
 
             // 尝试使用多种API方法建立预制体连接
             const connectionMethods = [
-                () => Editor.Message.request('scene', 'connect-prefab-instance', prefabConnectionData),
-                () => Editor.Message.request('scene', 'set-prefab-connection', prefabConnectionData),
-                () => Editor.Message.request('scene', 'apply-prefab-link', prefabConnectionData)
+                () => editorMessages.request('scene', 'connect-prefab-instance', prefabConnectionData),
+                () => editorMessages.request('scene', 'set-prefab-connection', prefabConnectionData),
+                () => editorMessages.request('scene', 'apply-prefab-link', prefabConnectionData)
             ];
 
             let connected = false;
@@ -419,7 +420,7 @@ export class PrefabTools implements ToolExecutor {
                 }
             };
 
-            await Editor.Message.request('scene', 'set-property', {
+            await editorMessages.request('scene', 'set-property', {
                 uuid: nodeUuid,
                 path: '_prefab',
                 dump: {
@@ -440,7 +441,7 @@ export class PrefabTools implements ToolExecutor {
      * 解析 prefab 的磁盘路径（Creator 3.8 无 read-asset 消息，需通过 query-asset-info + fs 读取）
      */
     private async resolvePrefabDiskPath(prefabPath: string): Promise<string> {
-        const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', prefabPath);
+        const assetInfo = await editorMessages.request('asset-db', 'query-asset-info', prefabPath);
         const candidatePaths: string[] = [];
 
         if (assetInfo?.source) {
@@ -484,7 +485,7 @@ export class PrefabTools implements ToolExecutor {
 
     private async tryCreateNodeWithPrefab(args: any): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'query-asset-info', args.prefabPath).then((assetInfo: any) => {
+            editorMessages.request('asset-db', 'query-asset-info', args.prefabPath).then((assetInfo: any) => {
                 if (!assetInfo) {
                     throw new Error('预制体未找到');
                 }
@@ -499,13 +500,13 @@ export class PrefabTools implements ToolExecutor {
                     createNodeOptions.parent = args.parentUuid;
                 }
 
-                return Editor.Message.request('scene', 'create-node', createNodeOptions);
+                return editorMessages.request('scene', 'create-node', createNodeOptions);
             }).then((nodeUuid: string | string[]) => {
                 const uuid = Array.isArray(nodeUuid) ? nodeUuid[0] : nodeUuid;
                 
                 // 如果指定了位置，设置节点位置
                 if (args.position && uuid) {
-                    Editor.Message.request('scene', 'set-property', {
+                    editorMessages.request('scene', 'set-property', {
                         uuid: uuid,
                         path: 'position',
                         dump: { value: args.position }
@@ -595,7 +596,7 @@ export class PrefabTools implements ToolExecutor {
 
     private async getAssetInfo(prefabPath: string): Promise<any> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'query-asset-info', prefabPath).then((assetInfo: any) => {
+            editorMessages.request('asset-db', 'query-asset-info', prefabPath).then((assetInfo: any) => {
                 resolve(assetInfo);
             }).catch(() => {
                 resolve(null);
@@ -621,7 +622,7 @@ export class PrefabTools implements ToolExecutor {
                 };
             }
 
-            Editor.Message.request('scene', 'create-node', createNodeOptions).then((nodeUuid: string | string[]) => {
+            editorMessages.request('scene', 'create-node', createNodeOptions).then((nodeUuid: string | string[]) => {
                 const uuid = Array.isArray(nodeUuid) ? nodeUuid[0] : nodeUuid;
                 resolve({
                     success: true,
@@ -640,9 +641,9 @@ export class PrefabTools implements ToolExecutor {
         return new Promise((resolve) => {
             // 尝试多种方法来应用预制体数据
             const methods = [
-                () => Editor.Message.request('scene', 'apply-prefab', { node: nodeUuid, prefab: prefabUuid }),
-                () => Editor.Message.request('scene', 'set-prefab', { node: nodeUuid, prefab: prefabUuid }),
-                () => Editor.Message.request('scene', 'load-prefab-to-node', { node: nodeUuid, prefab: prefabUuid })
+                () => editorMessages.request('scene', 'apply-prefab', { node: nodeUuid, prefab: prefabUuid }),
+                () => editorMessages.request('scene', 'set-prefab', { node: nodeUuid, prefab: prefabUuid }),
+                () => editorMessages.request('scene', 'load-prefab-to-node', { node: nodeUuid, prefab: prefabUuid })
             ];
 
             const tryMethod = (index: number) => {
@@ -893,7 +894,7 @@ export class PrefabTools implements ToolExecutor {
         return new Promise(async (resolve) => {
             try {
                 // 首先获取基本节点信息
-                const nodeInfo = await Editor.Message.request('scene', 'query-node', nodeUuid);
+                const nodeInfo = await editorMessages.request('scene', 'query-node', nodeUuid);
                 if (!nodeInfo) {
                     resolve(null);
                     return;
@@ -921,7 +922,7 @@ export class PrefabTools implements ToolExecutor {
     private async getNodeWithChildren(nodeUuid: string): Promise<any> {
         try {
             // 获取整个场景树
-            const tree = await Editor.Message.request('scene', 'query-node-tree');
+            const tree = await editorMessages.request('scene', 'query-node-tree');
             if (!tree) {
                 return null;
             }
@@ -975,7 +976,7 @@ export class PrefabTools implements ToolExecutor {
         }
 
         try {
-            const nodeData = await Editor.Message.request('scene', 'query-node', node.uuid);
+            const nodeData = await editorMessages.request('scene', 'query-node', node.uuid);
             if (nodeData && nodeData.__comps__ && nodeData.__comps__.length > 0) {
                 // 将 __comps__ 转换为简化的 components 结构（与 component-tools.getComponents 一致）
                 const components = nodeData.__comps__.map((comp: any) => {
@@ -1020,7 +1021,7 @@ export class PrefabTools implements ToolExecutor {
     private async buildBasicNodeInfo(nodeUuid: string): Promise<any> {
         return new Promise((resolve) => {
             // 构建基本的节点信息
-            Editor.Message.request('scene', 'query-node', nodeUuid).then((nodeInfo: any) => {
+            editorMessages.request('scene', 'query-node', nodeUuid).then((nodeInfo: any) => {
                 if (!nodeInfo) {
                     resolve(null);
                     return;
@@ -1303,9 +1304,9 @@ export class PrefabTools implements ToolExecutor {
         return new Promise((resolve, reject) => {
             // 尝试多种保存方法
             const saveMethods = [
-                () => Editor.Message.request('asset-db', 'create-asset', filePath, content),
-                () => Editor.Message.request('asset-db', 'save-asset', filePath, content),
-                () => Editor.Message.request('asset-db', 'write-asset', filePath, content)
+                () => editorMessages.request('asset-db', 'create-asset', filePath, content),
+                () => editorMessages.request('asset-db', 'save-asset', filePath, content),
+                () => editorMessages.request('asset-db', 'write-asset', filePath, content)
             ];
 
             const trySave = (index: number) => {
@@ -1328,14 +1329,14 @@ export class PrefabTools implements ToolExecutor {
     private async updatePrefab(prefabPath: string, nodeUuid: string): Promise<ToolResponse> {
         return new Promise(async (resolve) => {
             try {
-                const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', prefabPath);
+                const assetInfo = await editorMessages.request('asset-db', 'query-asset-info', prefabPath);
                 if (!assetInfo) {
                     resolve({ success: false, error: `Prefab not found: ${prefabPath}` });
                     return;
                 }
 
                 // 1. 校验节点是否为 prefab 实例（必须是 instantiate 出来的）
-                const nodeInfo: any = await Editor.Message.request('scene', 'query-node', nodeUuid);
+                const nodeInfo: any = await editorMessages.request('scene', 'query-node', nodeUuid);
                 if (!nodeInfo) {
                     resolve({ success: false, error: `Node not found: ${nodeUuid}` });
                     return;
@@ -1353,7 +1354,7 @@ export class PrefabTools implements ToolExecutor {
                 let beforeSize = 0;
                 let beforeHash = '';
                 try {
-                    const diskPath: any = await Editor.Message.request('asset-db', 'query-path', assetInfo.url || prefabPath);
+                    const diskPath: any = await editorMessages.request('asset-db', 'query-path', assetInfo.url || prefabPath);
                     const fs = require('fs');
                     const filePath = diskPath?.file || diskPath?.path;
                     if (filePath && fs.existsSync(filePath)) {
@@ -1365,7 +1366,7 @@ export class PrefabTools implements ToolExecutor {
                 } catch { /* ignore */ }
 
                 // 3. 执行 apply-prefab
-                await Editor.Message.request('scene', 'apply-prefab', {
+                await editorMessages.request('scene', 'apply-prefab', {
                     node: nodeUuid,
                     prefab: assetInfo.uuid
                 });
@@ -1379,7 +1380,7 @@ export class PrefabTools implements ToolExecutor {
                 let sizeDiff = 0;
                 let changed = false;
                 try {
-                    const diskPath: any = await Editor.Message.request('asset-db', 'query-path', assetInfo.url || prefabPath);
+                    const diskPath: any = await editorMessages.request('asset-db', 'query-path', assetInfo.url || prefabPath);
                     const fs = require('fs');
                     const filePath = diskPath?.file || diskPath?.path;
                     if (filePath && fs.existsSync(filePath)) {
@@ -1426,7 +1427,7 @@ export class PrefabTools implements ToolExecutor {
 
     private async revertPrefab(nodeUuid: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'revert-prefab', {
+            editorMessages.request('scene', 'revert-prefab', {
                 node: nodeUuid
             }).then(() => {
                 resolve({
@@ -1441,12 +1442,12 @@ export class PrefabTools implements ToolExecutor {
 
     private async getPrefabInfo(prefabPath: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'query-asset-info', prefabPath).then((assetInfo: any) => {
+            editorMessages.request('asset-db', 'query-asset-info', prefabPath).then((assetInfo: any) => {
                 if (!assetInfo) {
                     throw new Error('Prefab not found');
                 }
 
-                return Editor.Message.request('asset-db', 'query-asset-meta', assetInfo.uuid);
+                return editorMessages.request('asset-db', 'query-asset-meta', assetInfo.uuid);
             }).then((metaInfo: any) => {
                 const info: PrefabInfo = {
                     name: metaInfo.name,
@@ -1479,7 +1480,7 @@ export class PrefabTools implements ToolExecutor {
 
     private async validatePrefab(prefabPath: string): Promise<ToolResponse> {
         try {
-            const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', prefabPath);
+            const assetInfo = await editorMessages.request('asset-db', 'query-asset-info', prefabPath);
             if (!assetInfo) {
                 return { success: false, error: '预制体文件不存在' };
             }
@@ -1671,7 +1672,7 @@ export class PrefabTools implements ToolExecutor {
      */
     private async createAssetWithAssetDB(assetPath: string, content: string): Promise<{ success: boolean; data?: any; error?: string }> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'create-asset', assetPath, content, {
+            editorMessages.request('asset-db', 'create-asset', assetPath, content, {
                 overwrite: true,
                 rename: false
             }).then((assetInfo: any) => {
@@ -1690,7 +1691,7 @@ export class PrefabTools implements ToolExecutor {
     private async createMetaWithAssetDB(assetPath: string, metaContent: any): Promise<{ success: boolean; data?: any; error?: string }> {
         return new Promise((resolve) => {
             const metaContentString = JSON.stringify(metaContent, null, 2);
-            Editor.Message.request('asset-db', 'save-asset-meta', assetPath, metaContentString).then((assetInfo: any) => {
+            editorMessages.request('asset-db', 'save-asset-meta', assetPath, metaContentString).then((assetInfo: any) => {
                 console.log('创建meta文件成功:', assetInfo);
                 resolve({ success: true, data: assetInfo });
             }).catch((error: any) => {
@@ -1705,7 +1706,7 @@ export class PrefabTools implements ToolExecutor {
      */
     private async reimportAssetWithAssetDB(assetPath: string): Promise<{ success: boolean; data?: any; error?: string }> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'reimport-asset', assetPath).then((result: any) => {
+            editorMessages.request('asset-db', 'reimport-asset', assetPath).then((result: any) => {
                 console.log('重新导入资源成功:', result);
                 resolve({ success: true, data: result });
             }).catch((error: any) => {
@@ -1720,7 +1721,7 @@ export class PrefabTools implements ToolExecutor {
      */
     private async updateAssetWithAssetDB(assetPath: string, content: string): Promise<{ success: boolean; data?: any; error?: string }> {
         return new Promise((resolve) => {
-            Editor.Message.request('asset-db', 'save-asset', assetPath, content).then((result: any) => {
+            editorMessages.request('asset-db', 'save-asset', assetPath, content).then((result: any) => {
                 console.log('更新资源文件成功:', result);
                 resolve({ success: true, data: result });
             }).catch((error: any) => {
@@ -2456,7 +2457,7 @@ export class PrefabTools implements ToolExecutor {
     private async restorePrefabNode(nodeUuid: string, assetUuid: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // 使用官方API restore-prefab 还原预制体节点
-            (Editor.Message.request as any)('scene', 'restore-prefab', nodeUuid, assetUuid).then(() => {
+            (editorMessages.request as any)('scene', 'restore-prefab', nodeUuid, assetUuid).then(() => {
                 resolve({
                     success: true,
                     data: {
@@ -2477,7 +2478,7 @@ export class PrefabTools implements ToolExecutor {
     // 基于官方预制体格式的新实现方法
     private async getNodeDataForPrefab(nodeUuid: string): Promise<{ success: boolean; data?: any; error?: string }> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'query-node', nodeUuid).then((nodeData: any) => {
+            editorMessages.request('scene', 'query-node', nodeUuid).then((nodeData: any) => {
                 if (!nodeData) {
                     resolve({ success: false, error: '节点不存在' });
                     return;
@@ -2922,7 +2923,7 @@ export class PrefabTools implements ToolExecutor {
 
             // 使用asset-db API创建预制体文件
             await new Promise((resolve, reject) => {
-                Editor.Message.request('asset-db', 'create-asset', finalPrefabPath, prefabContent).then(() => {
+                editorMessages.request('asset-db', 'create-asset', finalPrefabPath, prefabContent).then(() => {
                     resolve(true);
                 }).catch((error: any) => {
                     reject(error);
@@ -2931,7 +2932,7 @@ export class PrefabTools implements ToolExecutor {
 
             // 创建meta文件
             await new Promise((resolve, reject) => {
-                Editor.Message.request('asset-db', 'create-asset', metaPath, metaContent).then(() => {
+                editorMessages.request('asset-db', 'create-asset', metaPath, metaContent).then(() => {
                     resolve(true);
                 }).catch((error: any) => {
                     reject(error);
@@ -2960,20 +2961,20 @@ export class PrefabTools implements ToolExecutor {
         }
 
         try {
-            const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', prefabPath);
+            const assetInfo = await editorMessages.request('asset-db', 'query-asset-info', prefabPath);
             if (!assetInfo) {
                 return { success: false, error: `Prefab not found: ${prefabPath}` };
             }
 
             const prefabUuid = assetInfo.uuid;
-            const openResult: any = await Editor.Message.request('scene', 'open-scene', prefabUuid);
+            const openResult: any = await editorMessages.request('scene', 'open-scene', prefabUuid);
             if (openResult && typeof openResult === 'object' && openResult.success === false) {
                 return { success: false, error: `Failed to open prefab: ${JSON.stringify(openResult)}` };
             }
 
             await new Promise(resolve => setTimeout(resolve, 300));
 
-            const nodeTree: any = await Editor.Message.request('scene', 'query-node-tree');
+            const nodeTree: any = await editorMessages.request('scene', 'query-node-tree');
             let rootUuid = '';
             if (nodeTree) {
                 const tree: any = Array.isArray(nodeTree) ? nodeTree[0] : nodeTree;
@@ -3028,7 +3029,7 @@ export class PrefabTools implements ToolExecutor {
         }
 
         try {
-            const saveResult = await Editor.Message.request('scene', 'save-scene');
+            const saveResult = await editorMessages.request('scene', 'save-scene');
             return {
                 success: true,
                 data: {
@@ -3050,11 +3051,11 @@ export class PrefabTools implements ToolExecutor {
 
         try {
             if (save) {
-                await Editor.Message.request('scene', 'save-scene');
+                await editorMessages.request('scene', 'save-scene');
             }
 
             const closedPath = PrefabTools.editState.prefabPath;
-            await Editor.Message.request('scene', 'close-scene');
+            await editorMessages.request('scene', 'close-scene');
             PrefabTools.clearEditState();
 
             return {
@@ -3073,7 +3074,7 @@ export class PrefabTools implements ToolExecutor {
         if (!PrefabTools.editState) return;
 
         try {
-            const sceneInfo: any = await Editor.Message.request('scene', 'query-node-tree');
+            const sceneInfo: any = await editorMessages.request('scene', 'query-node-tree');
             if (!sceneInfo || !(sceneInfo as any).name || !(sceneInfo as any).name.endsWith('-scene')) {
                 PrefabTools.clearEditState();
             }

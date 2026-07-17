@@ -2,6 +2,7 @@ import { ToolDefinition, ToolResponse, ToolExecutor, NodeInfo } from '../types';
 import { ComponentTools } from './component-tools';
 import { PrefabTools } from './prefab-tools';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class NodeTools implements ToolExecutor {
     private componentTools = new ComponentTools();
     getTools(): ToolDefinition[] {
@@ -289,7 +290,7 @@ export class NodeTools implements ToolExecutor {
                 // 如果没有提供父节点UUID，获取场景根节点
                 if (!targetParentUuid) {
                     try {
-                        const sceneInfo = await Editor.Message.request('scene', 'query-node-tree');
+                        const sceneInfo = await editorMessages.request('scene', 'query-node-tree');
                         if (sceneInfo && typeof sceneInfo === 'object' && !Array.isArray(sceneInfo) && Object.prototype.hasOwnProperty.call(sceneInfo, 'uuid')) {
                             targetParentUuid = (sceneInfo as any).uuid;
                             console.log(`No parent specified, using scene root: ${targetParentUuid}`);
@@ -297,7 +298,7 @@ export class NodeTools implements ToolExecutor {
                             targetParentUuid = sceneInfo[0].uuid;
                             console.log(`No parent specified, using scene root: ${targetParentUuid}`);
                         } else {
-                            const currentScene = await Editor.Message.request('scene', 'query-current-scene');
+                            const currentScene = await editorMessages.request('scene', 'query-current-scene');
                             if (currentScene && currentScene.uuid) {
                                 targetParentUuid = currentScene.uuid;
                             }
@@ -311,7 +312,7 @@ export class NodeTools implements ToolExecutor {
                 let finalAssetUuid = args.assetUuid;
                 if (args.assetPath && !finalAssetUuid) {
                     try {
-                        const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', args.assetPath);
+                        const assetInfo = await editorMessages.request('asset-db', 'query-asset-info', args.assetPath);
                         if (assetInfo && assetInfo.uuid) {
                             finalAssetUuid = assetInfo.uuid;
                             console.log(`Asset path '${args.assetPath}' resolved to UUID: ${finalAssetUuid}`);
@@ -367,14 +368,14 @@ export class NodeTools implements ToolExecutor {
                 console.log('Creating node with options:', createNodeOptions);
 
                 // 创建节点
-                const nodeUuid = await Editor.Message.request('scene', 'create-node', createNodeOptions);
+                const nodeUuid = await editorMessages.request('scene', 'create-node', createNodeOptions);
                 const uuid = Array.isArray(nodeUuid) ? nodeUuid[0] : nodeUuid;
 
                 // 处理兄弟索引
                 if (args.siblingIndex !== undefined && args.siblingIndex >= 0 && uuid && targetParentUuid) {
                     try {
                         await new Promise(resolve => setTimeout(resolve, 100)); // 等待内部状态更新
-                        await Editor.Message.request('scene', 'set-parent', {
+                        await editorMessages.request('scene', 'set-parent', {
                             parent: targetParentUuid,
                             uuids: [uuid],
                             keepWorldTransform: args.keepWorldTransform || false
@@ -475,7 +476,7 @@ export class NodeTools implements ToolExecutor {
 
     private async getNodeInfo(uuid: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'query-node', uuid).then((nodeData: any) => {
+            editorMessages.request('scene', 'query-node', uuid).then((nodeData: any) => {
                 if (!nodeData) {
                     resolve({
                         success: false,
@@ -512,7 +513,7 @@ export class NodeTools implements ToolExecutor {
         return new Promise((resolve) => {
             // Note: 'query-nodes-by-name' API doesn't exist in official documentation
             // Using tree traversal as primary approach
-            Editor.Message.request('scene', 'query-node-tree').then((tree: any) => {
+            editorMessages.request('scene', 'query-node-tree').then((tree: any) => {
                 const nodes: any[] = [];
                 
                 const searchTree = (node: any, currentPath: string = '') => {
@@ -550,7 +551,7 @@ export class NodeTools implements ToolExecutor {
                     args: [pattern, exactMatch]
                 };
                 
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
+                editorMessages.request('scene', 'execute-scene-script', options).then((result: any) => {
                     resolve(result);
                 }).catch((err2: Error) => {
                     resolve({ success: false, error: `Tree search failed: ${err.message}, Scene script failed: ${err2.message}` });
@@ -562,7 +563,7 @@ export class NodeTools implements ToolExecutor {
     private async findNodeByName(name: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // 优先尝试使用 Editor API 查询节点树并搜索
-            Editor.Message.request('scene', 'query-node-tree').then((tree: any) => {
+            editorMessages.request('scene', 'query-node-tree').then((tree: any) => {
                 const foundNode = this.searchNodeInTree(tree, name);
                 if (foundNode) {
                     resolve({
@@ -585,7 +586,7 @@ export class NodeTools implements ToolExecutor {
                     args: [name]
                 };
                 
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
+                editorMessages.request('scene', 'execute-scene-script', options).then((result: any) => {
                     resolve(result);
                 }).catch((err2: Error) => {
                     resolve({ success: false, error: `Direct API failed: ${err.message}, Scene script failed: ${err2.message}` });
@@ -614,7 +615,7 @@ export class NodeTools implements ToolExecutor {
     private async getAllNodes(): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // 尝试查询场景节点树
-            Editor.Message.request('scene', 'query-node-tree').then((tree: any) => {
+            editorMessages.request('scene', 'query-node-tree').then((tree: any) => {
                 const nodes: any[] = [];
                 
                 const traverseTree = (node: any) => {
@@ -658,7 +659,7 @@ export class NodeTools implements ToolExecutor {
                     args: []
                 };
                 
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
+                editorMessages.request('scene', 'execute-scene-script', options).then((result: any) => {
                     resolve(result);
                 }).catch((err2: Error) => {
                     resolve({ success: false, error: `Direct API failed: ${err.message}, Scene script failed: ${err2.message}` });
@@ -680,7 +681,7 @@ export class NodeTools implements ToolExecutor {
     private async setNodeProperty(uuid: string, property: string, value: any): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // 尝试直接使用 Editor API 设置节点属性
-            Editor.Message.request('scene', 'set-property', {
+            editorMessages.request('scene', 'set-property', {
                 uuid: uuid,
                 path: property,
                 dump: {
@@ -720,7 +721,7 @@ export class NodeTools implements ToolExecutor {
                     args: [uuid, property, value]
                 };
                 
-                Editor.Message.request('scene', 'execute-scene-script', options).then((result: any) => {
+                editorMessages.request('scene', 'execute-scene-script', options).then((result: any) => {
                     resolve(result);
                 }).catch((err2: Error) => {
                     resolve({ success: false, error: `Direct API failed: ${err.message}, Scene script failed: ${err2.message}` });
@@ -754,7 +755,7 @@ export class NodeTools implements ToolExecutor {
                     }
                     
                     updatePromises.push(
-                        Editor.Message.request('scene', 'set-property', {
+                        editorMessages.request('scene', 'set-property', {
                             uuid: uuid,
                             path: 'position',
                             dump: { value: normalizedPosition.value }
@@ -770,7 +771,7 @@ export class NodeTools implements ToolExecutor {
                     }
                     
                     updatePromises.push(
-                        Editor.Message.request('scene', 'set-property', {
+                        editorMessages.request('scene', 'set-property', {
                             uuid: uuid,
                             path: 'rotation',
                             dump: { value: normalizedRotation.value }
@@ -786,7 +787,7 @@ export class NodeTools implements ToolExecutor {
                     }
                     
                     updatePromises.push(
-                        Editor.Message.request('scene', 'set-property', {
+                        editorMessages.request('scene', 'set-property', {
                             uuid: uuid,
                             path: 'scale',
                             dump: { value: normalizedScale.value }
@@ -940,7 +941,7 @@ export class NodeTools implements ToolExecutor {
 
     private async deleteNode(uuid: string): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('scene', 'remove-node', { uuid: uuid }).then(() => {
+            editorMessages.invokeCapability('scene.deleteNodes', { uuid }).then(() => {
                 resolve({
                     success: true,
                     message: 'Node deleted successfully'
@@ -954,11 +955,7 @@ export class NodeTools implements ToolExecutor {
     private async moveNode(nodeUuid: string, newParentUuid: string, siblingIndex: number = -1): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // Use correct set-parent API instead of move-node
-            Editor.Message.request('scene', 'set-parent', {
-                parent: newParentUuid,
-                uuids: [nodeUuid],
-                keepWorldTransform: false
-            }).then(() => {
+            editorMessages.invokeCapability('scene.moveNodes', { uuid: nodeUuid, parentUuid: newParentUuid, index: siblingIndex }).then(() => {
                 resolve({
                     success: true,
                     message: 'Node moved successfully'
@@ -972,11 +969,14 @@ export class NodeTools implements ToolExecutor {
     private async duplicateNode(uuid: string, includeChildren: boolean = true): Promise<ToolResponse> {
         return new Promise((resolve) => {
             // Note: includeChildren parameter is accepted for future use but not currently implemented
-            Editor.Message.request('scene', 'duplicate-node', uuid).then((result: any) => {
+            editorMessages.invokeCapability('scene.duplicateNodes', { uuid }).then((result: any) => {
+                // Adapter normalizes to string[] (uuid array)
+                const newUuids = Array.isArray(result) ? result : (result?.uuid ? [result.uuid] : []);
                 resolve({
                     success: true,
                     data: {
-                        newUuid: result.uuid,
+                        newUuid: newUuids[0] ?? null,
+                        newUuids,
                         message: 'Node duplicated successfully'
                     }
                 });

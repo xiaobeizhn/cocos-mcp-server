@@ -1,5 +1,6 @@
 import { ToolDefinition, ToolResponse, ToolExecutor } from '../types';
 
+import { editorMessages } from '../services/default-editor-message-client';
 export class ServerTools implements ToolExecutor {
     getTools(): ToolDefinition[] {
         return [
@@ -81,7 +82,7 @@ export class ServerTools implements ToolExecutor {
 
     private async queryServerIPList(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('server', 'query-ip-list').then((ipList: string[]) => {
+            editorMessages.request('server', 'query-ip-list').then((ipList: string[]) => {
                 resolve({
                     success: true,
                     data: {
@@ -98,7 +99,7 @@ export class ServerTools implements ToolExecutor {
 
     private async querySortedServerIPList(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('server', 'query-sort-ip-list').then((sortedIPList: string[]) => {
+            editorMessages.request('server', 'query-sort-ip-list').then((sortedIPList: string[]) => {
                 resolve({
                     success: true,
                     data: {
@@ -115,7 +116,7 @@ export class ServerTools implements ToolExecutor {
 
     private async queryServerPort(): Promise<ToolResponse> {
         return new Promise((resolve) => {
-            Editor.Message.request('server', 'query-port').then((port: number) => {
+            editorMessages.request('server', 'query-port').then((port: number) => {
                 resolve({
                     success: true,
                     data: {
@@ -185,7 +186,7 @@ export class ServerTools implements ToolExecutor {
             
             try {
                 // Test basic Editor API connectivity
-                const testPromise = Editor.Message.request('server', 'query-port');
+                const testPromise = editorMessages.request('server', 'query-port');
                 const timeoutPromise = new Promise((_, reject) => {
                     setTimeout(() => reject(new Error('Connection timeout')), timeout);
                 });
