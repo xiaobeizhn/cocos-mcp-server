@@ -65,6 +65,11 @@ export class Cocos38EditorMessageClient implements EditorMessageClient {
                     throw this.withDiagnostics(fallbackError, capability, report, candidates, routeKey(fallback.route));
                 }
             }
+            // No fallback to try and the only route's message is missing → the
+            // capability is unsupported in this editor (rather than an internal error).
+            if (!fallback && isMessageMissingError(error)) {
+                throw this.unsupported(capability, report, candidates);
+            }
             throw this.withDiagnostics(error, capability, report, candidates, routeKey(selected.route));
         }
     }

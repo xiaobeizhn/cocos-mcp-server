@@ -1,8 +1,15 @@
-import { ResourceProvider, ResourceDefinition, ResourceReadResult } from '../types';
+import { ResourceProvider, ResourceDefinition, ResourceReadResult, SelectionActive, SelectionSnapshot, EditorMessageClient } from '../types';
 import { PrefabTools } from '../tools/prefab-tools';
+import { normalizeError } from '../services/error-normalizer';
 
 import { editorMessages } from '../services/default-editor-message-client';
 export class EditorResources implements ResourceProvider {
+    private readonly messages: EditorMessageClient;
+
+    constructor(messages?: EditorMessageClient) {
+        this.messages = messages ?? editorMessages;
+    }
+
     getResources(): ResourceDefinition[] {
         return [
             {
@@ -18,7 +25,7 @@ export class EditorResources implements ResourceProvider {
             {
                 uri: 'cocos://editor/selection',
                 name: 'editor_selection',
-                description: 'Currently selected node UUIDs in the hierarchy panel'
+                description: 'Currently selected node UUIDs (selection:query-selection) and the global active node (selection:query-global-activate)'
             },
             {
                 uri: 'cocos://editor/gizmo-state',
@@ -49,7 +56,7 @@ export class EditorResources implements ResourceProvider {
 
         let sceneInfo: any = null;
         try {
-            const tree: any = await editorMessages.request('scene', 'query-node-tree');
+            const tree: any = await this.messages.request('scene', 'query-node-tree');
             if (tree && tree.uuid) {
                 sceneInfo = {
                     name: tree.name || 'Untitled',
@@ -96,17 +103,47 @@ export class EditorResources implements ResourceProvider {
     }
 
     private async readSelection(): Promise<ResourceReadResult> {
-        try {
-            const selected: any = await editorMessages.invokeCapability('selection.queryNodes');
-            const content = {
-                selected: Array.isArray(selected)
-                    ? selected.map((s: any) => typeof s === 'string' ? { uuid: s } : { uuid: s.uuid, name: s.name })
-                    : []
-            };
-            return { content: JSON.stringify(content) };
-        } catch {
-            return { content: JSON.stringify({ selected: [] }) };
+        // Node selection is the primary query — its failure must surface as a
+        // structured error, never degrade to an empty array (which would mask an
+        // unavailable editor as "nothing selected").
+        //
+        // In Cocos Creator 3.8 the selected node UUIDs are queried through the
+        // synchronous Editor.Selection.getSelected('node') API — there is no
+        // `selection:query-selection` IPC message. We use the direct API when
+        // available and fall back to the message-based capability for other
+        // versions (and for tests, where Editor.Selection is not defined).
+        let selected: string[];
+        const selectionApi = (globalThis as any)?.Editor?.Selection;
+        if (selectionApi && typeof selectionApi.getSelected === 'function') {
+            selected = normalizeSelectionUuids(selectionApi.getSelected('node'));
+        } else {
+            const rawSelected = await this.messages.invokeCapability<string[]>('selection.queryNodes');
+            selected = normalizeSelectionUuids(rawSelected);
         }
+
+        const warnings: string[] = [];
+        let active: SelectionActive | null = null;
+        let activeSource = 'selection:query-global-activate';
+
+        try {
+            active = await this.messages.invokeCapability<SelectionActive | null>('selection.queryGlobalActive');
+        } catch (error) {
+            const normalized = normalizeError(error);
+            if (normalized.code !== 'UNSUPPORTED_CAPABILITY') throw error;
+            activeSource = 'unsupported';
+            active = null;
+            warnings.push('Global active selection is unavailable in this Creator version.');
+        }
+
+        const snapshot: SelectionSnapshot = {
+            type: 'node',
+            selected,
+            active,
+            source: { selected: 'selection:query-selection', active: activeSource },
+            warnings,
+        };
+
+        return { content: JSON.stringify(snapshot), mimeType: 'application/json' };
     }
 
     private async readGizmoState(): Promise<ResourceReadResult> {
@@ -123,4 +160,21 @@ export class EditorResources implements ResourceProvider {
 
         return { content: JSON.stringify({ tool, pivot, coordinate }) };
     }
+}
+
+/**
+ * selection:query-selection('node') may return a string[] of uuids, or an array
+ * of { uuid, name } records. Normalise to a stable string[] of uuids.
+ */
+function normalizeSelectionUuids(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((item): string | null => {
+            if (typeof item === 'string') return item;
+            if (item && typeof item === 'object' && typeof (item as any).uuid === 'string') {
+                return (item as any).uuid;
+            }
+            return null;
+        })
+        .filter((uuid): uuid is string => uuid !== null);
 }

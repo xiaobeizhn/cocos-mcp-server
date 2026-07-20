@@ -152,6 +152,17 @@ export class ToolManager {
             const { ReferenceImageTools } = require('./reference-image-tools');
             const { AssetAdvancedTools } = require('./asset-advanced-tools');
             const { ValidationTools } = require('./validation-tools');
+            const { ScriptTools } = require('./script-tools');
+            const { SearchTools } = require('./search-tools');
+            const { ProjectPathSandbox } = require('../services/project-path-sandbox');
+            const { ScriptFileService } = require('../services/script-file-service');
+            const { CodeSearchService } = require('../services/code-search-service');
+            const { editorMessages } = require('../services/default-editor-message-client');
+
+            // Shared Wave 1 services
+            const pathSandbox = new ProjectPathSandbox(editorMessages);
+            const scriptService = new ScriptFileService(editorMessages, pathSandbox);
+            const searchService = new CodeSearchService(pathSandbox);
 
             // 初始化工具实例
             const tools = {
@@ -168,7 +179,9 @@ export class ToolManager {
                 sceneView: new SceneViewTools(),
                 referenceImage: new ReferenceImageTools(),
                 assetAdvanced: new AssetAdvancedTools(),
-                validation: new ValidationTools()
+                validation: new ValidationTools(),
+                script: new ScriptTools(scriptService),
+                search: new SearchTools(searchService)
             };
 
             // 从每个工具类获取工具列表
@@ -273,6 +286,15 @@ export class ToolManager {
                 { name: 'validateProject', description: '验证项目' },
                 { name: 'validateAssets', description: '验证资源' },
                 { name: 'generateReport', description: '生成报告' }
+            ]},
+            { category: 'script', name: '脚本工具', tools: [
+                { name: 'create', description: '创建脚本' },
+                { name: 'read', description: '读取脚本' },
+                { name: 'get_sha', description: '获取脚本SHA' },
+                { name: 'delete', description: '删除脚本' }
+            ]},
+            { category: 'search', name: '搜索工具', tools: [
+                { name: 'code', description: '代码搜索' }
             ]}
         ];
 

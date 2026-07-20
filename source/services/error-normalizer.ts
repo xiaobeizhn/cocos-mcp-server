@@ -15,7 +15,11 @@ const suggestions: Record<ErrorCode, string[]> = {
     RESOURCE_NOT_FOUND: ['Use resources/list to inspect available resource URIs.'],
     METHOD_NOT_FOUND: ['Use the MCP protocol methods advertised during initialize.'],
     TIMEOUT: ['Wait for the editor operation to complete, then retry.'],
-    INTERNAL_ERROR: ['Inspect the extension and Creator logs for diagnostic details.']
+    INTERNAL_ERROR: ['Inspect the extension and Creator logs for diagnostic details.'],
+    ALREADY_EXISTS: ['Choose a different script path, or delete the existing asset first.'],
+    CONFLICT: ['Re-read the script to obtain the current SHA, then retry the operation.'],
+    PATH_OUTSIDE_PROJECT: ['Use a path under db://assets/ and avoid traversal or absolute paths.'],
+    FILE_TOO_LARGE: ['Reduce the file size, or narrow the search/read scope to a smaller range.']
 };
 
 export class McpError extends Error {
@@ -27,6 +31,9 @@ export class McpError extends Error {
         this.name = 'McpError';
         this.structured = createStructuredError(code, resolvedMessage, options);
     }
+
+    /** Convenience accessor mirroring structured.code, so error-shape matching works. */
+    get code(): ErrorCode { return this.structured.code; }
 }
 
 export function createStructuredError(
@@ -90,17 +97,22 @@ export function toJsonRpcError(error: StructuredError): { code: number; message:
         EDITOR_UNAVAILABLE: -32007,
         COMPILE_ERROR: -32008,
         UNSUPPORTED_CAPABILITY: -32009,
-        TIMEOUT: -32010
+        TIMEOUT: -32010,
+        ALREADY_EXISTS: -32011,
+        CONFLICT: -32012,
+        PATH_OUTSIDE_PROJECT: -32013,
+        FILE_TOO_LARGE: -32014
     };
     return { code: codes[error.code] ?? -32603, message: error.message, data: error };
 }
 
 export function toRestStatus(error: StructuredError): number {
     switch (error.code) {
-        case 'INVALID_ARGUMENT': case 'AMBIGUOUS_TARGET': return 400;
+        case 'INVALID_ARGUMENT': case 'AMBIGUOUS_TARGET': case 'PATH_OUTSIDE_PROJECT': return 400;
         case 'TOOL_NOT_FOUND': case 'RESOURCE_NOT_FOUND': case 'NOT_FOUND': case 'METHOD_NOT_FOUND': return 404;
         case 'INVALID_PROPERTY': case 'COMPILE_ERROR': return 422;
-        case 'EDITOR_BUSY': return 409;
+        case 'ALREADY_EXISTS': case 'CONFLICT': case 'EDITOR_BUSY': return 409;
+        case 'FILE_TOO_LARGE': return 413;
         case 'UNSUPPORTED_CAPABILITY': return 501;
         case 'EDITOR_UNAVAILABLE': return 503;
         case 'TIMEOUT': return 504;

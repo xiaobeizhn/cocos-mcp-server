@@ -19,6 +19,11 @@ import { SceneViewTools } from './tools/scene-view-tools';
 import { ReferenceImageTools } from './tools/reference-image-tools';
 import { AssetAdvancedTools } from './tools/asset-advanced-tools';
 import { ValidationTools } from './tools/validation-tools';
+import { ScriptTools } from './tools/script-tools';
+import { SearchTools } from './tools/search-tools';
+import { ProjectPathSandbox } from './services/project-path-sandbox';
+import { ScriptFileService } from './services/script-file-service';
+import { CodeSearchService } from './services/code-search-service';
 import { EditorResources } from './resources/editor-resources';
 import { SceneResources } from './resources/scene-resources';
 import { NodeResources } from './resources/node-resources';
@@ -45,6 +50,11 @@ export class MCPServer {
     private initializeTools(): void {
         try {
             console.log('[MCPServer] Initializing tools...');
+            // Shared Wave 1 services backed by the singleton editor message client.
+            const pathSandbox = new ProjectPathSandbox(editorMessages);
+            const scriptService = new ScriptFileService(editorMessages, pathSandbox);
+            const searchService = new CodeSearchService(pathSandbox);
+
             this.tools.scene = new SceneTools();
             this.tools.node = new NodeTools();
             this.tools.component = new ComponentTools();
@@ -59,6 +69,8 @@ export class MCPServer {
             this.tools.referenceImage = new ReferenceImageTools();
             this.tools.assetAdvanced = new AssetAdvancedTools();
             this.tools.validation = new ValidationTools();
+            this.tools.script = new ScriptTools(scriptService);
+            this.tools.search = new SearchTools(searchService);
             console.log('[MCPServer] Tools initialized successfully');
         } catch (error) {
             console.error('[MCPServer] Error initializing tools:', error);

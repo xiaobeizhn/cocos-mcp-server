@@ -2,18 +2,20 @@
     "$schema": "./@types/schema/package/index.json",
     "package_version": 2,
     "name": "cocos-mcp-server",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "author": "LiDaxian",
     "editor": ">=3.8.6",
     "scripts": {
         "preinstall": "node ./scripts/preinstall.js",
         "build": "tsc",
         "test:wave0": "npm run build && node --test dist/test/editor-message-client.test.js dist/test/error-normalizer.test.js dist/test/mcp-server-errors.test.js",
+        "test:wave1-1": "npm run build && node --test dist/test/project-path-sandbox.test.js dist/test/script-file-service.test.js dist/test/script-tools.test.js dist/test/code-search-service.test.js dist/test/editor-resources-selection.test.js",
         "watch": "tsc -w"
     },
     "description": "i18n:cocos-mcp-server.description",
     "main": "./dist/main.js",
     "dependencies": {
+        "fast-glob": "^3.3.3",
         "fs-extra": "^11.3.0",
         "vue": "^3.1.4"
     },
@@ -38,7 +40,7 @@
         }
     },
     "contributions": {
-                "menu": [
+        "menu": [
             {
                 "path": "i18n:menu.extension/Cocos MCP Server",
                 "label": "i18n:cocos-mcp-server.open_panel",

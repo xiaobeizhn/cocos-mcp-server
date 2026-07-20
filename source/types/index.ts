@@ -31,7 +31,11 @@ export type ErrorCode =
     | 'RESOURCE_NOT_FOUND'
     | 'METHOD_NOT_FOUND'
     | 'TIMEOUT'
-    | 'INTERNAL_ERROR';
+    | 'INTERNAL_ERROR'
+    | 'ALREADY_EXISTS'
+    | 'CONFLICT'
+    | 'PATH_OUTSIDE_PROJECT'
+    | 'FILE_TOO_LARGE';
 
 export interface StructuredError {
     code: ErrorCode;
@@ -62,7 +66,11 @@ export type EditorCapability =
     | 'asset.urlToUuid'
     | 'asset.uuidToUrl'
     | 'asset.refresh'
+    | 'asset.urlToFspath'
+    | 'asset.create'
+    | 'asset.delete'
     | 'selection.queryNodes'
+    | 'selection.queryGlobalActive'
     | 'scene.createNode'
     | 'scene.instantiateAsset'
     | 'scene.deleteNodes'
@@ -139,3 +147,112 @@ export interface ResourceReadResult { content: string; mimeType?: string; }
 export interface ResourceProvider { getResources(): ResourceDefinition[]; readResource(uri: string, params: Record<string, string>): Promise<ResourceReadResult>; }
 export type EditContext = 'scene' | 'prefab-stage';
 export interface PrefabEditState { active: boolean; prefabPath: string; prefabUuid: string; rootUuid: string; openedAt: string; }
+
+// ─── Wave 1: script lifecycle DTOs ───────────────────────────────────────────
+
+export type ScriptTemplate = 'component' | 'data-model' | 'module';
+
+export interface CreateScriptInput {
+    path: string;
+    content?: string;
+    template?: ScriptTemplate;
+    className?: string;
+}
+
+export interface ReadScriptInput {
+    path: string;
+    startLine?: number;
+    lineCount?: number;
+}
+
+export interface DeleteScriptInput {
+    path: string;
+    expectedSha?: string;
+    force?: boolean;
+}
+
+export interface ScriptFileMeta {
+    path: string;
+    sha: string;
+    size: number;
+    mtime: string;
+}
+
+export interface ScriptCreateResult extends ScriptFileMeta {
+    uuid: string | null;
+    created: boolean;
+    refreshRequested: boolean;
+}
+
+export interface ScriptReadResult extends ScriptFileMeta {
+    content: string;
+    encoding: 'utf8';
+    eol: 'lf' | 'crlf';
+    bom: boolean;
+    totalLines: number;
+    startLine: number;
+    returnedLines: number;
+    truncated: boolean;
+}
+
+export interface ScriptDeleteResult {
+    path: string;
+    deleted: boolean;
+    previousSha: string;
+}
+
+// ─── Wave 1: code search DTOs ────────────────────────────────────────────────
+
+export interface CodeSearchInput {
+    query: string;
+    regex?: boolean;
+    caseSensitive?: boolean;
+    include?: string[];
+    exclude?: string[];
+    contextBefore?: number;
+    contextAfter?: number;
+    maxResults?: number;
+    maxResultsPerFile?: number;
+    cursor?: string | null;
+}
+
+export interface CodeSearchMatch {
+    path: string;
+    line: number;
+    column: number;
+    match: string;
+    lineText: string;
+    before: Array<{ line: number; text: string }>;
+    after: Array<{ line: number; text: string }>;
+}
+
+export interface CodeSearchPage {
+    query: string;
+    matches: CodeSearchMatch[];
+    scannedFiles: number;
+    skippedFiles: number;
+    truncated: boolean;
+    nextCursor: string | null;
+    warnings: string[];
+}
+
+// ─── Wave 1: selection snapshot DTOs ─────────────────────────────────────────
+
+export interface SelectionActive {
+    type: 'node';
+    uuid: string;
+}
+
+export interface SelectionSnapshot {
+    type: 'node';
+    selected: string[];
+    active: SelectionActive | null;
+    source: { selected: string; active: string };
+    warnings: string[];
+}
+
+export interface ResolvedProjectPath {
+    url: string;
+    fsPath: string;
+    assetsRoot: string;
+}

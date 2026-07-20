@@ -31,10 +31,27 @@ export const cocos38Capabilities: Record<EditorCapability, CapabilityRoute[]> = 
         route('asset-db', 'refresh-asset', true, value => [asString(value?.url ?? value)], identity),
         route('asset-db', 'reimport-asset', true, value => [asString(value?.url ?? value)], identity)
     ],
+    // asset-db:url-to-fspath(url) -> string | null ; query-path compat (best-effort)
+    'asset.urlToFspath': [
+        route('asset-db', 'url-to-fspath', false, value => [asString(value?.url ?? value)], normalizeFspath),
+        route('asset-db', 'query-path', false, value => [asString(value?.url ?? value)], normalizeFspath)
+    ],
+    // asset-db:create-asset(name, content?, options?) -> asset record ; no overwrite, no rename
+    'asset.create': [
+        route('asset-db', 'create-asset', true, value => [asString(value?.url), value?.content ?? '', { overwrite: false, rename: false }], normalizeCreateResult)
+    ],
+    // asset-db:delete-asset(url) -> boolean ; single string form (@cocos/creator-types 3.8.6)
+    'asset.delete': [
+        route('asset-db', 'delete-asset', true, value => [asString(value?.url ?? value)], identity)
+    ],
     // selection:query-selection('node') -> uuid[] ; scene fallback
     'selection.queryNodes': [
         route('selection', 'query-selection', false, () => ['node'], normalizeSelection),
         route('scene', 'query-selection', false, () => ['node'], normalizeSelection)
+    ],
+    // selection:query-global-activate() -> node active selection
+    'selection.queryGlobalActive': [
+        route('selection', 'query-global-activate', false, () => [], normalizeGlobalActive)
     ],
     // scene:create-node(CreateNodeOptions) -> string[] (new uuids)
     'scene.createNode': [
@@ -94,6 +111,48 @@ function normalizeSelection(value: any): any[] {
     if (value == null) return [];
     if (Array.isArray(value)) return value;
     return [value];
+}
+
+/**
+ * asset-db:url-to-fspath returns a filesystem path string (or null when the URL
+ * has no backing file). The query-path compat fallback returns an asset record;
+ * we coerce either shape to a path string when possible.
+ */
+function normalizeFspath(value: any): string | null {
+    if (value == null) return null;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object') return value?.path ?? value?.fsPath ?? value?.url ?? null;
+    return null;
+}
+
+/**
+ * asset-db:create-asset returns the created asset record (with uuid/url) or a
+ * boolean on some versions. Normalize to { uuid, url } | true.
+ */
+function normalizeCreateResult(value: any): { uuid: string | null; url: string | null } | true {
+    if (value === true || value === false) return value;
+    if (value && typeof value === 'object') {
+        return { uuid: value.uuid ?? null, url: value.url ?? value.source ?? null };
+    }
+    return { uuid: null, url: null };
+}
+
+/**
+ * selection:query-global-activate returns the active node selection. It may be
+ * a uuid string, a record, or null. Normalize to { type, uuid } | null.
+ */
+function normalizeGlobalActive(value: any): { type: 'node'; uuid: string } | null {
+    if (value == null) return null;
+    if (typeof value === 'string') return { type: 'node', uuid: value };
+    if (Array.isArray(value)) {
+        const first = value.find((v): v is string => typeof v === 'string');
+        return first ? { type: 'node', uuid: first } : null;
+    }
+    if (typeof value === 'object') {
+        const uuid = value.uuid ?? value.id ?? value.uuids?.[0];
+        return uuid ? { type: 'node', uuid } : null;
+    }
+    return null;
 }
 
 function createNodeOptions(value: any): Record<string, unknown> {
